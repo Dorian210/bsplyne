@@ -7,7 +7,7 @@ import scipy.sparse as sps
 from wide_product import wide_product
 import meshio as io
 
-from bsplyne_lib.b_spline_basis import BSplineBasis
+from .b_spline_basis import BSplineBasis
 
 class BSpline:
     """

@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import numpy as np
 
-from bsplyne_lib.b_spline import BSpline
+from .b_spline import BSpline
 
 # %% 3D transformations
 def _rotation_matrix(axis, angle):

@@ -6,7 +6,7 @@ import numpy as np
 import scipy.sparse as sps
 from tqdm import trange
 
-from bsplyne_lib.b_spline import BSpline
+from .b_spline import BSpline
 
 class MultiPatchBSplineConnectivity:
     """
