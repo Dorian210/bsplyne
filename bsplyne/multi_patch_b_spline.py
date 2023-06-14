@@ -12,10 +12,11 @@ class MultiPatchBSplineConnectivity:
     """
     Contains all the methods to link multiple B-spline patches.
     It uses 3 representations of the data : 
-      - a unique representation containing only unique nodes indices, 
+      - a unique representation, possibly common with other meshes, containing 
+        only unique nodes indices, 
       - a unpacked representation containing duplicated nodes indices, 
       - a separated representation containing duplicated nodes indices, 
-        separated between patches.
+        separated between patches. It is here for user friendliness.
 
     Attributes
     ----------
@@ -39,7 +40,7 @@ class MultiPatchBSplineConnectivity:
     nb_patchs: int
     npa: int
     
-    def __init__(self, unique_nodes_inds, shape_by_patch):
+    def __init__(self, unique_nodes_inds, shape_by_patch, nb_unique_nodes):
         """
 
         Parameters
@@ -48,11 +49,13 @@ class MultiPatchBSplineConnectivity:
             The indices of the unique representation needed to create the unpacked one.
         shape_by_patch : numpy.ndarray of int
             The shape of the separated nodes by patch.
+        nb_unique_nodes : int
+            The total number of unique nodes.
         """
         self.unique_nodes_inds = unique_nodes_inds
         self.shape_by_patch = shape_by_patch
         self.nb_nodes = np.sum(np.prod(self.shape_by_patch, axis=1))
-        self.nb_unique_nodes = np.unique(self.unique_nodes_inds).size
+        self.nb_unique_nodes = nb_unique_nodes #np.unique(self.unique_nodes_inds).size
         self.nb_patchs, self.npa = self.shape_by_patch.shape
     
     @classmethod
@@ -90,7 +93,8 @@ class MultiPatchBSplineConnectivity:
                 unique_nodes_inds[v] = unique_nodes_inds[key]
         different_unique_nodes_inds, inverse = np.unique(unique_nodes_inds, return_inverse=True)
         unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], different_unique_nodes_inds))) - 1)[inverse]
-        return cls(unique_nodes_inds, shape_by_patch)
+        nb_unique_nodes = np.unique(unique_nodes_inds).size
+        return cls(unique_nodes_inds, shape_by_patch, nb_unique_nodes)
     
     @classmethod
     def from_separated_ctrlPts(cls, separated_ctrlPts, eps=1e-10):
@@ -157,20 +161,19 @@ class MultiPatchBSplineConnectivity:
         unpacked_field = unique_field[..., self.unique_nodes_inds]
         return unpacked_field
     
-    def unpack_patch_jacobians(self, field_size):
-        patch_jacobians = []
-        ind = 0
-        for patch_shape in self.shape_by_patch:
-            nb_row = np.prod(patch_shape)
-            next_ind = ind + nb_row
-            row = np.arange(nb_row)
-            col = self.unique_nodes_inds[ind:next_ind]
-            data = np.ones(nb_row)
-            mat = sps.coo_matrix((data, (row, col)), shape=(nb_row, self.nb_unique_nodes))
-            patch_jacobians.append(sps.block_diag([mat]*field_size))
-            ind = next_ind
-        return patch_jacobians
-        
+#     def unpack_patch_jacobians(self, field_size):
+#         patch_jacobians = []
+#         ind = 0
+#         for patch_shape in self.shape_by_patch:
+#             nb_row = np.prod(patch_shape)
+#             next_ind = ind + nb_row
+#             row = np.arange(nb_row)
+#             col = self.unique_nodes_inds[ind:next_ind]
+#             data = np.ones(nb_row)
+#             mat = sps.coo_matrix((data, (row, col)), shape=(nb_row, self.nb_unique_nodes))
+#             patch_jacobians.append(sps.block_diag([mat]*field_size))
+#             ind = next_ind
+#         return patch_jacobians
     
     def pack(self, unpacked_field):
         """
@@ -239,27 +242,40 @@ class MultiPatchBSplineConnectivity:
         unpacked_field = np.concatenate([f.reshape((*field_shape, -1)) for f in separated_field], axis=-1)
         return unpacked_field
     
-    def unique_field_indices(self, field_shape):
+    def unique_field_indices(self, field_shape, representation="separated"):
         """
-        Get the separated representation of a field's unique representation's indices.
+        Get the unique, unpacked or separated representation of a field's unique indices.
 
         Parameters
         ----------
         field_shape : tuple of int
-            The shape of the field. For example, if it is a vector field, ``field_shape`` 
+            The shape of the field. For example, if it is a vector field, `field_shape` 
             should be (3,). If it is a second order tensor field, it should be (3, 3).
+        representation : str, optional
+            The user must choose between `"unique"`, `"unpacked"`, and `"separated"`.
+            It corresponds to the type of representation to get, by default "separated"
 
         Returns
         -------
-        unique_field_indices_as_separated_field : list of numpy.ndarray of int
-            The separated representation of a field's unique representation's 
-            indices. Every array is of shape : 
-            (*``field_shape``, nb elem for dim 1, ..., nb elem for dim `npa`)
+        unique_field_indices : numpy.ndarray of int or list of numpy.ndarray of int
+            The unique, unpacked or separated representation of a field's unique indices.
+            If unique, its shape is (*`field_shape`, `self`.`nb_unique_nodes`).
+            If unpacked, its shape is : (*`field_shape`, `self`.`nb_nodes`).
+            If separated, every array is of shape : (*`field_shape`, nb elem for dim 1, ..., nb elem for dim `npa`).
         """
         nb_indices = np.prod(field_shape)*self.nb_unique_nodes
         unique_field_indices_as_unique_field = np.arange(nb_indices, dtype='int').reshape((*field_shape, self.nb_unique_nodes))
-        unique_field_indices_as_separated_field = self.separate(self.unpack(unique_field_indices_as_unique_field))
-        return unique_field_indices_as_separated_field
+        if representation=="unique":
+            unique_field_indices = unique_field_indices_as_unique_field
+            return unique_field_indices
+        elif representation=="unpacked":
+            unique_field_indices = self.unpack(unique_field_indices_as_unique_field)
+            return unique_field_indices
+        elif representation=="separated":
+            unique_field_indices = self.separate(self.unpack(unique_field_indices_as_unique_field))
+            return unique_field_indices
+        else:
+            raise ValueError(f'Representation "{representation}" not recognised. Representation must either be "unique", "unpacked", or "separated" !')
     
     def get_duplicate_unpacked_nodes_mask(self):
         unique, inverse, counts = np.unique(self.unique_nodes_inds, return_inverse=True, return_counts=True)
@@ -307,7 +323,8 @@ class MultiPatchBSplineConnectivity:
         border_shape_by_patch = np.concatenate(border_shape_by_patch)
         border_unique_to_self_unique_connectivity, inverse = np.unique(border_unique_nodes_inds, return_inverse=True)
         border_unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], border_unique_to_self_unique_connectivity))) - 1)[inverse]
-        border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch)
+        border_nb_unique_nodes = np.unique(border_unique_nodes_inds).size
+        border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
         return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
     
     def extract_exterior_surfaces(self, splines):
@@ -385,8 +402,20 @@ class MultiPatchBSplineConnectivity:
         border_shape_by_patch = np.concatenate(border_shape_by_patch)
         border_unique_to_self_unique_connectivity, inverse = np.unique(border_unique_nodes_inds, return_inverse=True)
         border_unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], border_unique_to_self_unique_connectivity))) - 1)[inverse]
-        border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch)
+        border_nb_unique_nodes = np.unique(border_unique_nodes_inds).size
+        border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
         return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
+    
+    def subset(self, splines, patches_to_keep):
+        new_splines = splines[patches_to_keep]
+        separated_unique_nodes_inds = self.unique_field_indices(())
+        new_unique_nodes_inds = np.concatenate([separated_unique_nodes_inds[patch].flat for patch in patches_to_keep])
+        new_shape_by_patch = self.shape_by_patch[patches_to_keep]
+        new_unique_to_self_unique_connectivity, inverse = np.unique(new_unique_nodes_inds, return_inverse=True)
+        new_unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], new_unique_to_self_unique_connectivity))) - 1)[inverse]
+        new_nb_unique_nodes = np.unique(new_unique_nodes_inds).size
+        new_connectivity = self.__class__(new_unique_nodes_inds, new_shape_by_patch, new_nb_unique_nodes)
+        return new_connectivity, new_splines, new_unique_to_self_unique_connectivity
 
 if __name__=='__main__':
     from bsplyne_lib import new_cube
@@ -574,12 +603,12 @@ class MultiPatchBSpline:
         self.npatch = len(self.splines)
         assert np.all([s.NPa==self.splines[0].NPa for s in self.splines[1:]]), "The parametric space should be of the same dimension on every patch"
         self.NPa = self.splines[0].NPa
-        assert np.all([s.NPh==self.splines[0].NPh for s in self.splines[1:]]), "The physical space should be of the same dimension on every patch"
-        self.NPh = self.splines[0].NPh
-        if couples is None:
-            self.couples = CouplesBSplineBorder.from_splines(splines)
-        else:
-            self.couples = couples
+        # assert np.all([s.NPh==self.splines[0].NPh for s in self.splines[1:]]), "The physical space should be of the same dimension on every patch"
+        # self.NPh = self.splines[0].NPh
+        # if couples is None:
+        #     self.couples = CouplesBSplineBorder.from_splines(splines)
+        # else:
+        #     self.couples = couples
         if connectivity is None:
             self.connectivity = self.couples.get_connectivity(self.splines)
         else:
@@ -617,7 +646,7 @@ class MultiPatchBSpline:
         # TODO with IDW
         raise NotImplementedError()
     
-    def save_paraview(self, path, name, n_step=1, n_eval_per_elem=10, fields={}, fields_arr=None, verbose=True):
+    def save_paraview(self, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True):
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa
         
@@ -626,26 +655,25 @@ class MultiPatchBSpline:
         else:
             iterator = range(self.npatch)
         
-        if fields_arr is None:
-            fields_arr = [{} for _ in range(self.npatch)]
+        if separated_fields is None:
+            separated_fields = [{} for _ in range(self.npatch)]
         
-        for key, value in fields.items():
+        for key, value in unique_fields.items():
             if callable(value):
-                raise NotImplementedError("To handle functions as fields, use fields_arr !")
+                raise NotImplementedError("To handle functions as fields, use separated_fields !")
             else:
-                ind = 0
-                for i in range(self.npatch):
-                    next_ind = ind + self.connectivity.coo_sizes[i]//self.NPh
-                    fields_arr[i][key] = value[..., ind:next_ind]
-                    ind = next_ind
+                separated_value = self.connectivity.separate(self.connectivity.unpack(value))
+                for patch in range(self.npatch):
+                    separated_fields[patch][key] = separated_value[patch]
         
-        groups = None
+        groups = {}
         for patch in iterator:
-            groups = self.splines[patch].saveParaview(path, 
+            groups = self.splines[patch].saveParaview(separated_ctrl_pts[patch], 
+                                                      path, 
                                                       name, 
                                                       n_step=n_step, 
                                                       n_eval_per_elem=n_eval_per_elem, 
-                                                      fields=fields_arr[patch], 
+                                                      fields=separated_fields[patch], 
                                                       groups=groups, 
                                                       make_pvd=((patch + 1)==self.npatch), 
                                                       verbose=False)
