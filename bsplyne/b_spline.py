@@ -7,7 +7,7 @@ import scipy.sparse as sps
 from wide_product import wide_product
 import meshio as io
 
-from .b_spline_basis import BSplineBasis
+from bsplyne.b_spline_basis import BSplineBasis
 
 class BSpline:
     """
@@ -449,6 +449,23 @@ class BSpline:
         ctrlPts = pts.reshape((NPh, *pts_shape))
         return ctrlPts
     
+    def greville_abscissa(self):
+        """
+        Compute the Greville abscissa.
+
+        Returns
+        -------
+        greville : list of np.array of float
+            Greville abscissa on each parametric axis.
+        """
+        greville = []
+        for idx in range(self.NPa):
+            basis = self.bases[idx]
+            p = basis.p
+            knot = basis.knot
+            greville.append(np.convolve(knot[1:-1], np.ones(p, dtype=int), 'valid')/p)
+        return greville
+    
     def _saveControlPolyParaview(self, ctrlPts, file_prefix, n_step, fields={}):
         """
         Saves a paraview file containing all the data to plot the control 
@@ -497,14 +514,7 @@ class BSpline:
                              axis=0)
         cells = {'line': lines}
         points = np.moveaxis(ctrlPts, 0, -1).reshape((-1, NPh))
-        greville = []
-        for idx in range(self.NPa):
-            basis = self.bases[idx]
-            p = basis.p
-            knot = basis.knot
-            n = ctrlPts.shape[1+idx]
-            greville.append(np.convolve(knot[1:-1], np.ones(p, dtype=int), 'valid')/p)
-        greville = tuple(greville)
+        greville = tuple(self.greville_abscissa())
         n = self.getNbFunc()
         point_data = {}
         for key, value in fields.items():
@@ -763,7 +773,7 @@ class BSpline:
             mesh = io.Mesh(points, cells, point_data_step)
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
-    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields={}, groups=None, make_pvd=True, verbose=True):
+    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields={}, groups={}, make_pvd=True, verbose=True):
         """
         Saves a plot as a set of .vtu files with a .pvd file.
 
@@ -796,7 +806,7 @@ class BSpline:
             If the value given is a `numpy`.`array` of `float`, the 
             shape must be :
             (`n_step`, size for paraview, *`ctrlPts`.`shape`[1:]) 
-        groups : dict of dict, default None
+        groups : dict of dict, default {}
             `dict` (out) of `dict` (in) as :
             - (out) : 
                 * "interior" : (in) type of `dict`, 
@@ -842,16 +852,20 @@ class BSpline:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa
         
         interior = "interior"
-        elements_borders = "elements_borders"
-        control_points = "control_points"
-        if groups is None:
-            groups = {interior:         {"ext": "vtu", "npart": 1, "nstep": n_step}, 
-                      elements_borders: {"ext": "vtu", "npart": 1, "nstep": n_step}, 
-                      control_points  : {"ext": "vtu", "npart": 1, "nstep": n_step}}
-        else:
+        if interior in groups:
             groups[interior]["npart"] += 1
+        else:
+            groups[interior] = {"ext": "vtu", "npart": 1, "nstep": n_step}
+        elements_borders = "elements_borders"
+        if elements_borders in groups:
             groups[elements_borders]["npart"] += 1
+        else:
+            groups[elements_borders] = {"ext": "vtu", "npart": 1, "nstep": n_step}
+        control_points = "control_points"
+        if control_points in groups:
             groups[control_points]["npart"] += 1
+        else:
+            groups[control_points] = {"ext": "vtu", "npart": 1, "nstep": n_step}
         
         interior_prefix = os.path.join(path, name+"_"+interior+"_"+str(groups[interior]["npart"] - 1))
         self._saveElementsInteriorParaview(ctrlPts, n_eval_per_elem, interior_prefix, n_step, fields)
@@ -914,8 +928,8 @@ def _writePVD(fileName, groups):
                 dataSet.setAttribute("timestep", str(js))
                 dataSet.setAttribute("group", name)
                 dataSet.setAttribute("part", str(jp))
-                dataSet.setAttribute("file", fname+"_"+name+"_"+str(jp)+"_"+str(js)+"."+grp["ext"])
-                dataSet.setAttribute("name", name)
+                dataSet.setAttribute("file", f"{fname}_{name}_{jp}_{js}.{grp['ext']}")
+                dataSet.setAttribute("name", f"{name}_{jp}")
                 collection.appendChild(dataSet)
     outFile = open(fileName+".pvd", 'w')
     pvd.writexml(outFile, newl='\n')
