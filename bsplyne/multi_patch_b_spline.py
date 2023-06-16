@@ -309,7 +309,7 @@ class MultiPatchBSplineConnectivity:
                     border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
                     border_shape_by_patch_spline_border = border_shape_by_patch_spline[::-1][None]
                     border_shape_by_patch.append(border_shape_by_patch_spline_border)
-                    print(f"side {0} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+                    # print(f"side {0} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
                 if not np.take(duplicate_nodes_mask_spline, -1, axis=axis).all():
                     bspline_border = BSpline.from_bases(bases)
                     border_splines.append(bspline_border)
@@ -317,7 +317,7 @@ class MultiPatchBSplineConnectivity:
                     border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
                     border_shape_by_patch_spline_border = border_shape_by_patch_spline[None]
                     border_shape_by_patch.append(border_shape_by_patch_spline_border)
-                    print(f"side {-1} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+                    # print(f"side {-1} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
         border_splines = np.array(border_splines, dtype='object')
         border_unique_nodes_inds = np.concatenate(border_unique_nodes_inds)
         border_shape_by_patch = np.concatenate(border_shape_by_patch)
@@ -327,84 +327,84 @@ class MultiPatchBSplineConnectivity:
         border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
         return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
     
-    def extract_exterior_surfaces(self, splines):
-        if self.npa!=3:
-            raise AssertionError("The parametric space must be 3D to extract surfaces !")
-        duplicate_unpacked_nodes_mask = self.get_duplicate_unpacked_nodes_mask()
-        duplicate_separated_nodes_mask = self.separate(duplicate_unpacked_nodes_mask)
-        separated_unique_nodes_inds = self.unique_field_indices(())
-        arr = np.arange(self.npa).tolist()
-        border_splines = []
-        border_unique_nodes_inds = []
-        border_shape_by_patch = []
-        for i in range(self.nb_patchs):
-            spline = splines[i]
-            duplicate_nodes_mask_spline = duplicate_separated_nodes_mask[i]
-            unique_nodes_inds_spline = separated_unique_nodes_inds[i]
-            shape_by_patch_spline = self.shape_by_patch[i]
-            
-            # surface 1
-            if not np.take(duplicate_nodes_mask_spline, 0, axis=0).all():
-                bspline_border = BSpline.from_bases(spline.bases[:0:-1])
-                border_splines.append(bspline_border)
-                unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=0).T.ravel()
-                border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
-                border_shape_by_patch_spline = shape_by_patch_spline[:0:-1][None]
-                border_shape_by_patch.append(border_shape_by_patch_spline)
-                print(f"Surface 1 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-            # surface 2
-            if not np.take(duplicate_nodes_mask_spline, -1, axis=0).all():
-                bspline_border = BSpline.from_bases(spline.bases[1:])
-                border_splines.append(bspline_border)
-                unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=0).ravel()
-                border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
-                border_shape_by_patch_spline = shape_by_patch_spline[1:][None]
-                border_shape_by_patch.append(border_shape_by_patch_spline)
-                print(f"Surface 2 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-            # surface 3
-            if not np.take(duplicate_nodes_mask_spline, 0, axis=1).all():
-                bspline_border = BSpline.from_bases(spline.bases[::2])
-                border_splines.append(bspline_border)
-                unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=1).ravel()
-                border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
-                border_shape_by_patch_spline = shape_by_patch_spline[::2][None]
-                border_shape_by_patch.append(border_shape_by_patch_spline)
-                print(f"Surface 3 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-            # surface 4
-            if not np.take(duplicate_nodes_mask_spline, -1, axis=1).all():
-                bspline_border = BSpline.from_bases(spline.bases[::-2])
-                border_splines.append(bspline_border)
-                unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=1).T.ravel()
-                border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
-                border_shape_by_patch_spline = shape_by_patch_spline[::-2][None]
-                border_shape_by_patch.append(border_shape_by_patch_spline)
-                print(f"Surface 4 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-            # surface 5
-            if not np.take(duplicate_nodes_mask_spline, 0, axis=2).all():
-                bspline_border = BSpline.from_bases(spline.bases[1::-1])
-                border_splines.append(bspline_border)
-                unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=2).T.ravel()
-                border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
-                border_shape_by_patch_spline = shape_by_patch_spline[1::-1][None]
-                border_shape_by_patch.append(border_shape_by_patch_spline)
-                print(f"Surface 5 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-            # surface 6
-            if not np.take(duplicate_nodes_mask_spline, -1, axis=2).all():
-                bspline_border = BSpline.from_bases(spline.bases[:2])
-                border_splines.append(bspline_border)
-                unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=2).ravel()
-                border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
-                border_shape_by_patch_spline = shape_by_patch_spline[:2][None]
-                border_shape_by_patch.append(border_shape_by_patch_spline)
-                print(f"Surface 6 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-        border_splines = np.array(border_splines, dtype='object')
-        border_unique_nodes_inds = np.concatenate(border_unique_nodes_inds)
-        border_shape_by_patch = np.concatenate(border_shape_by_patch)
-        border_unique_to_self_unique_connectivity, inverse = np.unique(border_unique_nodes_inds, return_inverse=True)
-        border_unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], border_unique_to_self_unique_connectivity))) - 1)[inverse]
-        border_nb_unique_nodes = np.unique(border_unique_nodes_inds).size
-        border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
-        return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
+    # def extract_exterior_surfaces(self, splines):
+    #     if self.npa!=3:
+    #         raise AssertionError("The parametric space must be 3D to extract surfaces !")
+    #     duplicate_unpacked_nodes_mask = self.get_duplicate_unpacked_nodes_mask()
+    #     duplicate_separated_nodes_mask = self.separate(duplicate_unpacked_nodes_mask)
+    #     separated_unique_nodes_inds = self.unique_field_indices(())
+    #     arr = np.arange(self.npa).tolist()
+    #     border_splines = []
+    #     border_unique_nodes_inds = []
+    #     border_shape_by_patch = []
+    #     for i in range(self.nb_patchs):
+    #         spline = splines[i]
+    #         duplicate_nodes_mask_spline = duplicate_separated_nodes_mask[i]
+    #         unique_nodes_inds_spline = separated_unique_nodes_inds[i]
+    #         shape_by_patch_spline = self.shape_by_patch[i]
+    #         
+    #         # surface 1
+    #         if not np.take(duplicate_nodes_mask_spline, 0, axis=0).all():
+    #             bspline_border = BSpline.from_bases(spline.bases[:0:-1])
+    #             border_splines.append(bspline_border)
+    #             unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=0).T.ravel()
+    #             border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+    #             border_shape_by_patch_spline = shape_by_patch_spline[:0:-1][None]
+    #             border_shape_by_patch.append(border_shape_by_patch_spline)
+    #             print(f"Surface 1 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+    #         # surface 2
+    #         if not np.take(duplicate_nodes_mask_spline, -1, axis=0).all():
+    #             bspline_border = BSpline.from_bases(spline.bases[1:])
+    #             border_splines.append(bspline_border)
+    #             unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=0).ravel()
+    #             border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+    #             border_shape_by_patch_spline = shape_by_patch_spline[1:][None]
+    #             border_shape_by_patch.append(border_shape_by_patch_spline)
+    #             print(f"Surface 2 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+    #         # surface 3
+    #         if not np.take(duplicate_nodes_mask_spline, 0, axis=1).all():
+    #             bspline_border = BSpline.from_bases(spline.bases[::2])
+    #             border_splines.append(bspline_border)
+    #             unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=1).ravel()
+    #             border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+    #             border_shape_by_patch_spline = shape_by_patch_spline[::2][None]
+    #             border_shape_by_patch.append(border_shape_by_patch_spline)
+    #             print(f"Surface 3 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+    #         # surface 4
+    #         if not np.take(duplicate_nodes_mask_spline, -1, axis=1).all():
+    #             bspline_border = BSpline.from_bases(spline.bases[::-2])
+    #             border_splines.append(bspline_border)
+    #             unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=1).T.ravel()
+    #             border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+    #             border_shape_by_patch_spline = shape_by_patch_spline[::-2][None]
+    #             border_shape_by_patch.append(border_shape_by_patch_spline)
+    #             print(f"Surface 4 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+    #         # surface 5
+    #         if not np.take(duplicate_nodes_mask_spline, 0, axis=2).all():
+    #             bspline_border = BSpline.from_bases(spline.bases[1::-1])
+    #             border_splines.append(bspline_border)
+    #             unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=2).T.ravel()
+    #             border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+    #             border_shape_by_patch_spline = shape_by_patch_spline[1::-1][None]
+    #             border_shape_by_patch.append(border_shape_by_patch_spline)
+    #             print(f"Surface 5 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+    #         # surface 6
+    #         if not np.take(duplicate_nodes_mask_spline, -1, axis=2).all():
+    #             bspline_border = BSpline.from_bases(spline.bases[:2])
+    #             border_splines.append(bspline_border)
+    #             unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=2).ravel()
+    #             border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+    #             border_shape_by_patch_spline = shape_by_patch_spline[:2][None]
+    #             border_shape_by_patch.append(border_shape_by_patch_spline)
+    #             print(f"Surface 6 of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+    #     border_splines = np.array(border_splines, dtype='object')
+    #     border_unique_nodes_inds = np.concatenate(border_unique_nodes_inds)
+    #     border_shape_by_patch = np.concatenate(border_shape_by_patch)
+    #     border_unique_to_self_unique_connectivity, inverse = np.unique(border_unique_nodes_inds, return_inverse=True)
+    #     border_unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], border_unique_to_self_unique_connectivity))) - 1)[inverse]
+    #     border_nb_unique_nodes = np.unique(border_unique_nodes_inds).size
+    #     border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
+    #     return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
     
     def subset(self, splines, patches_to_keep):
         new_splines = splines[patches_to_keep]
