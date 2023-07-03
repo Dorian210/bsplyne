@@ -177,6 +177,35 @@ class BSpline:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
         XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)]) # type: ignore
         return XI
+
+    def linspace_for_integration(self, n_eval_per_elem=10):
+        """
+        Generate `NPa` sets of xi values over the span of the basis, 
+        centerered on intervals of returned lengths.
+
+        Parameters
+        ----------
+        n_eval_per_elem : numpy.array of int or int, optional
+            Number of values per element over each parametric axis, by default 10
+
+        Returns
+        -------
+        XI : tuple of numpy.array of float
+            Set of xi values over each span.
+        dXI : tuple of numpy.array of float
+            Set of integration weight of each point in `XI`.
+        """
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
+        XI = []
+        dXI = []
+        for basis, n in zip(self.bases, n_eval_per_elem): # type: ignore
+            xi, dxi = basis.linspace_for_integration(n)
+            XI.append(xi)
+            dXI.append(dxi)
+        XI = tuple(XI)
+        dXI = tuple(dXI)
+        return XI, dXI
     
     def DN(self, XI, k=0):
         """
