@@ -140,24 +140,24 @@ class BSpline:
         """
         return np.prod([basis.n + 1 for basis in self.bases])
     
-    def get_indices(self, begining=0):
-        """
-        Create an array containing the indices of the control points of 
-        the B-spline.
-
-        Parameters
-        ----------
-        begining : int, optional
-            First index of the arrayof indices, by default 0
-
-        Returns
-        -------
-        indices : np.array of int
-            Indices of the control points in the same shape as the 
-            control points.
-        """
-        indices = np.arange(begining, begining + self.ctrlPts.size).reshape(self.ctrlPts.shape)
-        return indices
+#     def get_indices(self, begining=0):
+#         """
+#         Create an array containing the indices of the control points of 
+#         the B-spline.
+# 
+#         Parameters
+#         ----------
+#         begining : int, optional
+#             First index of the arrayof indices, by default 0
+# 
+#         Returns
+#         -------
+#         indices : np.array of int
+#             Indices of the control points in the same shape as the 
+#             control points.
+#         """
+#         indices = np.arange(begining, begining + self.ctrlPts.size).reshape(self.ctrlPts.shape)
+#         return indices
 
     def linspace(self, n_eval_per_elem=10):
         """
@@ -174,8 +174,8 @@ class BSpline:
             Set of xi values over each span.
         """
         if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa
-        XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)])
+            n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
+        XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)]) # type: ignore
         return XI
     
     def DN(self, XI, k=0):
@@ -192,7 +192,7 @@ class BSpline:
             parametric coordinates as [[xi_0, ...], [eta_a, ...], ...].
             Else, if `tuple` of `numpy`.`array` of `float`, contains the `NPa` 
             parametric coordinates as [[xi_0, ...], [eta_0, ...], ...].
-        k : numpy.array of int or int, optional
+        k : list of int or int, optional
             If `numpy`.`array` of `int`, or if k is 0, compute the `k`-th 
             derivative of the B-spline basis evaluated on each axis of the 
             parametric space.
@@ -235,43 +235,37 @@ class BSpline:
         
         if isinstance(k, int):
             if k==0:
-                k = [0]*self.NPa
-            else:
-                dkbasis_dxik = np.empty((self.NPa, k + 1), dtype='object')
-                for idx in range(self.NPa):
-                    basis = self.bases[idx]
-                    xi = XI[idx] - np.finfo('float').eps * (XI[idx]==basis.knot[-1])
-                    for k_querry in range(k + 1):
-                        dkbasis_dxik[idx, k_querry] = basis.N(xi, k=k_querry)
-                DN = np.empty([self.NPa]*k, dtype='object')
-                dic = {}
-                for axes in np.ndindex(*DN.shape):
-                    u, c = np.unique(axes, return_counts=True)
-                    k_arr = np.zeros(self.NPa, dtype='int')
-                    k_arr[u] = c
-                    key = tuple(k_arr)
-                    if key not in dic:
-                        dic[key] = None
-                        for idx in range(self.NPa):
-                            k_querry = k_arr[idx]
-                            if dic[key] is None:
-                                dic[key] = dkbasis_dxik[idx, k_querry]
-                            else:
-                                dic[key] = fct(dic[key], dkbasis_dxik[idx, k_querry])
-                    DN[axes] = dic[key]
-                return DN
+                k = [0]*self.NPa # type: ignore
         
-        if not isinstance(k, int):
-            DN = None
+        if isinstance(k, int):
+            dkbasis_dxik = np.empty((self.NPa, k + 1), dtype='object')
+            for idx in range(self.NPa):
+                basis = self.bases[idx]
+                xi = XI[idx] - np.finfo('float').eps * (XI[idx]==basis.knot[-1])
+                for k_querry in range(k + 1):
+                    dkbasis_dxik[idx, k_querry] = basis.N(xi, k=k_querry)
+            DN = np.empty([self.NPa]*k, dtype='object')
+            dic = {}
+            for axes in np.ndindex(*DN.shape):
+                u, c = np.unique(axes, return_counts=True)
+                k_arr = np.zeros(self.NPa, dtype='int')
+                k_arr[u] = c
+                key = tuple(k_arr)
+                if key not in dic:
+                    dic[key] = np.ones((1, 1))
+                    for idx in range(self.NPa):
+                        k_querry = k_arr[idx]
+                        dic[key] = fct(dic[key], dkbasis_dxik[idx, k_querry])
+                DN[axes] = dic[key]
+            return DN
+        else:
+            DN = np.ones((1, 1))
             for idx in range(self.NPa):
                 basis = self.bases[idx]
                 k_idx = k[idx]
                 xi = XI[idx] - np.finfo('float').eps * (XI[idx]==basis.knot[-1])
                 DN_elem = basis.N(xi, k=k_idx)
-                if DN is None:
-                    DN = DN_elem
-                else:
-                    DN = fct(DN, DN_elem)
+                DN = fct(DN, DN_elem)
             return DN
     
     def __call__(self, ctrlPts, XI, k=0):
@@ -343,7 +337,7 @@ class BSpline:
         DN = self.DN(XI, k)
         NPh = ctrlPts.shape[0]
         if isinstance(DN, np.ndarray):
-            values = np.empty((NPh, *DN.shape, XI_shape))
+            values = np.empty((NPh, *DN.shape, *XI_shape), dtype='float')
             slice_before = slice(0, NPh)
             slices_after = [slice(0, xi_shape) for xi_shape in XI_shape]
             for axes in np.ndindex(*DN.shape):
@@ -527,7 +521,7 @@ class BSpline:
             point_data_step = {}
             for key, value in point_data.items():
                 point_data_step[key] = value[i]
-            mesh = io.Mesh(points, cells, point_data_step)
+            mesh = io.Mesh(points, cells, point_data_step) # type: ignore
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
     def _saveElemSeparatorParaview(self, ctrlPts, n_eval_per_elem, file_prefix, n_step=1, fields={}):
@@ -592,7 +586,7 @@ class BSpline:
                 lin =  np.linspace(a, b, n_eval)
                 XI = tuple(knots_uniq[:idx] + [lin] + knots_uniq[(idx+1):])
                 shape = shape_uniq[:idx] + [lin.size] + shape_uniq[(idx+1):]
-                N = self.DN(XI, [0]*self.NPa)
+                N = self.DN(XI, [0]*self.NPa) # type: ignore
                 pts = N @ ctrlPts.reshape((NPh, -1)).T
                 points = pts if points is None else np.vstack((points, pts))
                 for key, value in fields.items():
@@ -605,7 +599,7 @@ class BSpline:
                     if point_data[key] is None:
                         point_data[key] = to_store
                     else:
-                        point_data[key] = np.concatenate((point_data[key], to_store), axis=1)
+                        point_data[key] = np.concatenate((point_data[key], to_store), axis=1) # type: ignore
                 size = np.prod(shape)
                 lns = Size + np.arange(size).reshape(shape)
                 lns = np.moveaxis(lns, idx, 0).reshape((shape[idx], -1))
@@ -619,8 +613,8 @@ class BSpline:
         for i in range(n_step):
             point_data_step = {}
             for key, value in point_data.items():
-                point_data_step[key] = value[i]
-            mesh = io.Mesh(points, cells, point_data_step)
+                point_data_step[key] = value[i] # type: ignore
+            mesh = io.Mesh(points, cells, point_data_step) # type: ignore
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
     def _saveElementsInteriorParaview(self, ctrlPts, n_eval_per_elem, file_prefix, n_step=1, fields={}):
@@ -770,7 +764,7 @@ class BSpline:
             point_data_step = {}
             for key, value in point_data.items():
                 point_data_step[key] = value[i]
-            mesh = io.Mesh(points, cells, point_data_step)
+            mesh = io.Mesh(points, cells, point_data_step) # type: ignore
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
     def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields={}, groups={}, make_pvd=True, verbose=True):

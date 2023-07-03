@@ -75,6 +75,36 @@ class BSplineBasis:
                             res)
         return res
     
+    def linspace_for_integration(self, n_eval_per_elem=10):
+        """
+        Generate a set of xi values over the span of the basis, centerered 
+        on intervals of returned lengths.
+
+        Parameters
+        ----------
+        n_eval_per_elem : int, optional
+            Number of values per element, by default 10
+
+        Returns
+        -------
+        xi : numpy.array of float
+            Set of xi values over the span.
+        dxi : numpy.array of float
+            Integration weight of each point.
+        """
+        knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=self.span[0], self.knot<=self.span[1])])
+        xi = []
+        dxi = []
+        a = knot_uniq[0]
+        for i in range(1, knot_uniq.size):
+            b = knot_uniq[i]
+            dxi_i = (b - a)/n_eval_per_elem
+            xi.append(np.linspace(a + 0.5*dxi_i, b - 0.5*dxi_i, n_eval_per_elem))
+            dxi.append(dxi_i*np.ones(n_eval_per_elem))
+        xi = np.hstack(xi)
+        dxi = np.hstack(dxi)
+        return xi, dxi
+    
     def N(self, XI, k=0):
         """
         Compute the `k`-th derivative of the BSpline basis functions for a set 
@@ -496,8 +526,9 @@ def _findElem(p, m, n, knot, xi):
         pastrouve = xi<knot[i] or xi>=knot[i+1]
         i += 1
     if pastrouve:
-        print("ValueError : xi=", xi, " is outside the definition interval [", knot[p], ", ", knot[m - p], "] of the spline !")
-        return None
+        raise ValueError("xi is outside the definition interval of the spline !")
+        # print("ValueError : xi=", xi, " is outside the definition interval [", knot[p], ", ", knot[m - p], "] of the spline !")
+        # return None
     i -= 1
     return i
 

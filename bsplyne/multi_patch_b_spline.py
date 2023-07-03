@@ -416,6 +416,39 @@ class MultiPatchBSplineConnectivity:
         new_nb_unique_nodes = np.unique(new_unique_nodes_inds).size
         new_connectivity = self.__class__(new_unique_nodes_inds, new_shape_by_patch, new_nb_unique_nodes)
         return new_connectivity, new_splines, new_unique_to_self_unique_connectivity
+    
+    def save_paraview(self, splines, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True):
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem]*self.npa
+        
+        if verbose:
+            iterator = trange(self.nb_patchs, desc=("Saving " + name))
+        else:
+            iterator = range(self.nb_patchs)
+        
+        if separated_fields is None:
+            separated_fields = [{} for _ in range(self.nb_patchs)]
+        
+        for key, value in unique_fields.items():
+            if callable(value):
+                raise NotImplementedError("To handle functions as fields, use separated_fields !")
+            else:
+                separated_value = self.separate(self.unpack(value))
+                for patch in range(self.nb_patchs):
+                    separated_fields[patch][key] = separated_value[patch]
+        
+        groups = {}
+        for patch in iterator:
+            groups = splines[patch].saveParaview(separated_ctrl_pts[patch], 
+                                                      path, 
+                                                      name, 
+                                                      n_step=n_step, 
+                                                      n_eval_per_elem=n_eval_per_elem, 
+                                                      fields=separated_fields[patch], 
+                                                      groups=groups, 
+                                                      make_pvd=((patch + 1)==self.nb_patchs), 
+                                                      verbose=False)
+        
 
 if __name__=='__main__':
     from bsplyne_lib import new_cube
