@@ -139,6 +139,22 @@ class BSpline:
             Number of basis functions.
         """
         return np.prod([basis.n + 1 for basis in self.bases])
+
+    def getSpans(self):
+        """
+        Return the span of each basis in the parametric space.
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        spans : list of tuple(float, float)
+            Contains the span of the B-spline.
+        """
+        spans = [basis.span for basis in self.bases]
+        return spans
     
 #     def get_indices(self, begining=0):
 #         """
@@ -178,7 +194,7 @@ class BSpline:
         XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)]) # type: ignore
         return XI
 
-    def linspace_for_integration(self, n_eval_per_elem=10):
+    def linspace_for_integration(self, n_eval_per_elem=10, bounding_box=None):
         """
         Generate `NPa` sets of xi values over the span of the basis, 
         centerered on intervals of returned lengths.
@@ -187,6 +203,8 @@ class BSpline:
         ----------
         n_eval_per_elem : numpy.array of int or int, optional
             Number of values per element over each parametric axis, by default 10
+        bounding_box : numpy.array of float , optional
+            Lower and upper bounds on each axis, by default [[xi0, xin], [eta0, etan], ...]
 
         Returns
         -------
@@ -197,10 +215,12 @@ class BSpline:
         """
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
+        if bounding_box is None:
+            bounding_box = [b.span for b in self.bases] # type: ignore
         XI = []
         dXI = []
-        for basis, n in zip(self.bases, n_eval_per_elem): # type: ignore
-            xi, dxi = basis.linspace_for_integration(n)
+        for basis, (n, bb) in zip(self.bases, zip(n_eval_per_elem, bounding_box)): # type: ignore
+            xi, dxi = basis.linspace_for_integration(n, bb)
             XI.append(xi)
             dXI.append(dxi)
         XI = tuple(XI)
@@ -472,21 +492,33 @@ class BSpline:
         ctrlPts = pts.reshape((NPh, *pts_shape))
         return ctrlPts
     
-    def greville_abscissa(self):
+    def greville_abscissa(self, return_weights=False):
         """
         Compute the Greville abscissa.
+        
+        Parameters
+        ----------
+        return_weights : bool, optional
+            If `True`, return the weight, the length of the span of the basis 
+            function corresponding to each abscissa, by default `False`
 
         Returns
         -------
         greville : list of np.array of float
             Greville abscissa on each parametric axis.
+        weights : list of np.array of float
+            Span of each basis function on each parametric axis.
         """
         greville = []
+        weights = []
         for idx in range(self.NPa):
             basis = self.bases[idx]
             p = basis.p
             knot = basis.knot
             greville.append(np.convolve(knot[1:-1], np.ones(p, dtype=int), 'valid')/p)
+            weights.append(knot[(p+1):] - knot[:-(p+1)])
+        if return_weights:
+            return greville, weights
         return greville
     
     def _saveControlPolyParaview(self, ctrlPts, file_prefix, n_step, fields={}):
@@ -796,7 +828,7 @@ class BSpline:
             mesh = io.Mesh(points, cells, point_data_step) # type: ignore
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
-    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields={}, groups={}, make_pvd=True, verbose=True):
+    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields=None, groups=None, make_pvd=True, verbose=True):
         """
         Saves a plot as a set of .vtu files with a .pvd file.
 
@@ -815,7 +847,7 @@ class BSpline:
         n_eval_per_elem : numpy.array of int or int, default 10
             Contains the number of evaluation of the B-spline in each 
             direction of the parametric space for each element.
-        fields : dict of function or of numpy.array of float, default {}
+        fields : dict of function or of numpy.array of float, default None
             Fields to plot at each time step. The name of the field will 
             be the dict key. 
             If the value given is a `function`, it must take the spline 
@@ -829,7 +861,7 @@ class BSpline:
             If the value given is a `numpy`.`array` of `float`, the 
             shape must be :
             (`n_step`, size for paraview, *`ctrlPts`.`shape`[1:]) 
-        groups : dict of dict, default {}
+        groups : dict of dict, default None
             `dict` (out) of `dict` (in) as :
             - (out) : 
                 * "interior" : (in) type of `dict`, 
@@ -873,6 +905,12 @@ class BSpline:
         """
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa
+        
+        if fields is None:
+            fields = {}
+        
+        if groups is None:
+            groups = {}
         
         interior = "interior"
         if interior in groups:

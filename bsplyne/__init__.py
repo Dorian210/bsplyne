@@ -4,7 +4,8 @@
 from .b_spline_basis import BSplineBasis
 from .b_spline import BSpline
 from .multi_patch_b_spline import MultiPatchBSplineConnectivity, CouplesBSplineBorder, MultiPatchBSpline
-from .geometries_in_3D import (new_quarter_circle, 
+from .geometries_in_3D import (_scale_rotate_translate, 
+                               new_quarter_circle, 
                                new_circle, 
                                new_disk, 
                                new_degenerated_disk, 

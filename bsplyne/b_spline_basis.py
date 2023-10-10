@@ -75,7 +75,7 @@ class BSplineBasis:
                             res)
         return res
     
-    def linspace_for_integration(self, n_eval_per_elem=10):
+    def linspace_for_integration(self, n_eval_per_elem=10, bounding_box=None):
         """
         Generate a set of xi values over the span of the basis, centerered 
         on intervals of returned lengths.
@@ -84,6 +84,8 @@ class BSplineBasis:
         ----------
         n_eval_per_elem : int, optional
             Number of values per element, by default 10
+        bounding_box : numpy.array of float, optional
+            Lower and upper bounds, by default `self`.`span`
 
         Returns
         -------
@@ -92,15 +94,52 @@ class BSplineBasis:
         dxi : numpy.array of float
             Integration weight of each point.
         """
+        if bounding_box is None:
+            lower, upper = self.span
+        else:
+            lower, upper = bounding_box
         knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=self.span[0], self.knot<=self.span[1])])
         xi = []
         dxi = []
-        a = knot_uniq[0]
-        for i in range(1, knot_uniq.size):
-            b = knot_uniq[i]
-            dxi_i = (b - a)/n_eval_per_elem
-            xi.append(np.linspace(a + 0.5*dxi_i, b - 0.5*dxi_i, n_eval_per_elem))
-            dxi.append(dxi_i*np.ones(n_eval_per_elem))
+        for i in range(knot_uniq.size - 1):
+            a = knot_uniq[i]
+            b = knot_uniq[i + 1]
+            if a<upper and b>lower:
+                if a<lower and b>upper:
+                    dxi_i_l = (upper - lower)/n_eval_per_elem
+                    if (lower - 0.5*dxi_i_l)<a:
+                        dxi_i_u = (upper - a)/n_eval_per_elem
+                        if (upper + 0.5*dxi_i_u)>b:
+                            dxi_i = (b - a)/n_eval_per_elem
+                        else:
+                            b = upper + 0.5*dxi_i_u
+                            dxi_i = dxi_i_u
+                    else:
+                        a = lower - 0.5*dxi_i_l
+                        dxi_i_u = dxi_i_l
+                        if (upper + 0.5*dxi_i_u)>b:
+                            dxi_i = (b - lower)/n_eval_per_elem
+                        else:
+                            dxi_i = dxi_i_u
+                            b = upper + 0.5*dxi_i_u
+                elif a<lower and b>lower:
+                    dxi_i_l = (b - lower)/n_eval_per_elem
+                    if (lower - 0.5*dxi_i_l)<a:
+                        dxi_i = (b - a)/n_eval_per_elem
+                    else:
+                        a = lower - 0.5*dxi_i_l
+                        dxi_i = dxi_i_l
+                elif a<upper and b>upper:
+                    dxi_i_u = (upper - a)/n_eval_per_elem
+                    if (upper + 0.5*dxi_i_u)>b:
+                        dxi_i = (b - a)/n_eval_per_elem
+                    else:
+                        b = upper + 0.5*dxi_i_u
+                        dxi_i = dxi_i_u
+                else:
+                    dxi_i = (b - a)/n_eval_per_elem
+                xi.append(np.linspace(a + 0.5*dxi_i, b - 0.5*dxi_i, n_eval_per_elem))
+                dxi.append(dxi_i*np.ones(n_eval_per_elem))
         xi = np.hstack(xi)
         dxi = np.hstack(dxi)
         return xi, dxi
@@ -146,7 +185,7 @@ class BSplineBasis:
         DN = sps.coo_matrix((vals, (row, col)), shape=(XI.size, self.n + 1))
         return DN
     
-    def plotN(self, k=0):
+    def plotN(self, k=0, show=True):
         """
         Plots the basis functions over the span.
 
@@ -154,6 +193,8 @@ class BSplineBasis:
         ----------
         k : int, optional
             `k`-th derivative of the BSpline ploted. The default is 0.
+        show : bool, optional
+            Should the plot be displayed ? The default is True.
 
         Returns
         -------
@@ -178,7 +219,8 @@ class BSplineBasis:
         plt.xlabel("$\\xi$")
         if self.n+1<=10:
             plt.legend()
-        plt.show()
+        if show:
+            plt.show()
     
     def _funcDElem(self, i, j, new_knot, p):
         """
