@@ -1,12 +1,16 @@
 # %%
+import os
 from itertools import permutations
 from functools import lru_cache
+from typing import Union, Iterable
 
 import numpy as np
 import scipy.sparse as sps
 from tqdm import trange
 
 from .b_spline import BSpline
+from .b_spline_basis import BSplineBasis
+from .save_YETI import Domain, write
 
 class MultiPatchBSplineConnectivity:
     """
@@ -175,7 +179,7 @@ class MultiPatchBSplineConnectivity:
 #             ind = next_ind
 #         return patch_jacobians
     
-    def pack(self, unpacked_field):
+    def pack(self, unpacked_field, method='mean'):
         """
         Extract the unique representation from an unpacked representation.
 
@@ -184,6 +188,8 @@ class MultiPatchBSplineConnectivity:
         unpacked_field : numpy.ndarray
             The unpacked representation. Its shape should be :
             (field, shape, ..., `self`.`nb_nodes`)
+        method: str
+            The method used to group values that could be different
 
         Returns
         -------
@@ -193,7 +199,15 @@ class MultiPatchBSplineConnectivity:
         """
         field_shape = unpacked_field.shape[:-1]
         unique_field = np.zeros((*field_shape, self.nb_unique_nodes), dtype=unpacked_field.dtype)
-        unique_field[..., self.unique_nodes_inds[::-1]] = unpacked_field[..., ::-1]
+        if method=='first':
+            unique_field[..., self.unique_nodes_inds[::-1]] = unpacked_field[..., ::-1]
+        elif method=='mean':
+            np.add.at(unique_field.T, self.unique_nodes_inds, unpacked_field.T)
+            counts = np.zeros(self.nb_unique_nodes, dtype='uint')
+            np.add.at(counts, self.unique_nodes_inds, 1)
+            unique_field /= counts
+        else:
+            raise NotImplementedError(f"Method {method} is not implemented ! Consider using 'first' or 'mean'.")
         return unique_field
     
     def separate(self, unpacked_field):
@@ -311,6 +325,50 @@ class MultiPatchBSplineConnectivity:
                     border_shape_by_patch.append(border_shape_by_patch_spline_border)
                     # print(f"side {0} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
                 if not np.take(duplicate_nodes_mask_spline, -1, axis=axis).all():
+                    bspline_border = BSpline.from_bases(bases)
+                    border_splines.append(bspline_border)
+                    unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=axis).transpose(axes).ravel()
+                    border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+                    border_shape_by_patch_spline_border = border_shape_by_patch_spline[None]
+                    border_shape_by_patch.append(border_shape_by_patch_spline_border)
+                    # print(f"side {-1} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+        border_splines = np.array(border_splines, dtype='object')
+        border_unique_nodes_inds = np.concatenate(border_unique_nodes_inds)
+        border_shape_by_patch = np.concatenate(border_shape_by_patch)
+        border_unique_to_self_unique_connectivity, inverse = np.unique(border_unique_nodes_inds, return_inverse=True)
+        border_unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], border_unique_to_self_unique_connectivity))) - 1)[inverse]
+        border_nb_unique_nodes = np.unique(border_unique_nodes_inds).size
+        border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
+        return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
+    
+    def extract_interior_borders(self, splines):
+        if self.npa<=1:
+            raise AssertionError("The parametric space must be at least 2D to extract borders !")
+        duplicate_unpacked_nodes_mask = self.get_duplicate_unpacked_nodes_mask()
+        duplicate_separated_nodes_mask = self.separate(duplicate_unpacked_nodes_mask)
+        separated_unique_nodes_inds = self.unique_field_indices(())
+        arr = np.arange(self.npa).tolist()
+        border_splines = []
+        border_unique_nodes_inds = []
+        border_shape_by_patch = []
+        for i in range(self.nb_patchs):
+            spline = splines[i]
+            duplicate_nodes_mask_spline = duplicate_separated_nodes_mask[i]
+            unique_nodes_inds_spline = separated_unique_nodes_inds[i]
+            shape_by_patch_spline = self.shape_by_patch[i]
+            for axis in range(self.npa):
+                bases = np.hstack((spline.bases[(axis + 1):], spline.bases[:axis]))
+                axes = arr[axis:-1] + arr[:axis]
+                border_shape_by_patch_spline = np.hstack((shape_by_patch_spline[(axis + 1):], shape_by_patch_spline[:axis]))
+                if np.take(duplicate_nodes_mask_spline, 0, axis=axis).all():
+                    bspline_border = BSpline.from_bases(bases[::-1])
+                    border_splines.append(bspline_border)
+                    unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, 0, axis=axis).transpose(axes[::-1]).ravel()
+                    border_unique_nodes_inds.append(unique_nodes_inds_spline_border)
+                    border_shape_by_patch_spline_border = border_shape_by_patch_spline[::-1][None]
+                    border_shape_by_patch.append(border_shape_by_patch_spline_border)
+                    # print(f"side {0} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
+                if np.take(duplicate_nodes_mask_spline, -1, axis=axis).all():
                     bspline_border = BSpline.from_bases(bases)
                     border_splines.append(bspline_border)
                     unique_nodes_inds_spline_border = np.take(unique_nodes_inds_spline, -1, axis=axis).transpose(axes).ravel()
@@ -448,6 +506,22 @@ class MultiPatchBSplineConnectivity:
                                                       groups=groups, 
                                                       make_pvd=((patch + 1)==self.nb_patchs), 
                                                       verbose=False)
+    
+    def save_YETI(self, splines, separated_ctrl_pts, path, name):
+        if self.npa==2:
+            el_type = "U3"
+        elif self.npa==3:
+            el_type = "U1"
+        else:
+            raise NotImplementedError("Can only save surfaces or volumes !")
+        objects_list = []
+        for patch in range(self.nb_patchs):
+            geomdl_patch = splines[patch].getGeomdl(separated_ctrl_pts[patch])
+            obj = Domain.DefaultDomain(geometry=geomdl_patch,
+                                       id_dom=patch,
+                                       elem_type=el_type)
+            objects_list.append(obj)
+        write.write_files(objects_list, os.path.join(path, name))
         
 
 if __name__=='__main__':
@@ -468,6 +542,16 @@ if __name__=='__main__':
     
 # %%
 
+import os
+from itertools import permutations
+from functools import lru_cache
+from typing import Union, Iterable
+
+import numpy as np
+import scipy.sparse as sps
+from tqdm import trange
+
+from bsplyne import BSplineBasis, BSpline, MultiPatchBSplineConnectivity
 
 class CouplesBSplineBorder:
     
@@ -493,6 +577,18 @@ class CouplesBSplineBorder:
         return border_field
     
     @classmethod
+    def extract_border_spline(cls, spline, axis, front_side):
+        base_face = np.hstack((np.arange(axis + 1, spline.NPa), np.arange(axis)))
+        if not front_side:
+            base_face = base_face[::-1]
+        degrees = spline.getDegrees()
+        knots = spline.getKnots()
+        border_degrees = [degrees[i] for i in base_face]
+        border_knots = [knots[i] for i in base_face]
+        border_spline = BSpline(border_degrees, border_knots)
+        return border_spline
+    
+    @classmethod
     def transpose_and_flip(cls, field, transpose, flip, field_dim=1):
         field = field.transpose(*np.arange(field_dim), *(transpose + field_dim))
         for i in range(flip.size):
@@ -509,6 +605,25 @@ class CouplesBSplineBorder:
             else:
                 new_knots.append(knots[transpose[i]])
         return new_knots
+    
+    @classmethod
+    def transpose_and_flip_back_knots(cls, knots, spans, transpose, flip):
+        transpose_back = np.argsort(transpose)
+        flip_back = flip[transpose_back]
+        return cls.transpose_and_flip_knots(knots, spans, transpose_back, flip_back)
+    
+    @classmethod
+    def transpose_and_flip_spline(cls, spline, transpose, flip):
+        spans = spline.getSpans()
+        knots = spline.getKnots()
+        degrees = spline.getDegrees()
+        for i in range(flip.size):
+            p = degrees[transpose[i]]
+            knot = knots[transpose[i]]
+            if flip[i]:
+                knot = sum(spans[i]) - knot[::-1]
+            spline.bases[i] = BSplineBasis(p, knot)
+        return spline
     
     @classmethod
     def from_splines(cls, separated_ctrl_pts, splines):
@@ -611,6 +726,102 @@ class CouplesBSplineBorder:
             border2_turned_and_fliped = self.__class__.transpose_and_flip(border2, self.transpose_2_to_1[i], self.flip_2_to_1[i], field_dim=field_dim)
             borders2_turned_and_fliped.append(border2_turned_and_fliped)
         return borders1, borders2_turned_and_fliped
+    
+    def get_borders_couples_splines(self, splines):
+        borders1 = []
+        borders2_turned_and_fliped = []
+        for i in range(self.nb_couples):
+            border1 = self.__class__.extract_border_spline(splines[self.spline1_inds[i]], self.axes1[i], self.front_sides1[i])
+            borders1.append(border1)
+            border2 = self.__class__.extract_border_spline(splines[self.spline2_inds[i]], self.axes2[i], self.front_sides2[i])
+            border2_turned_and_fliped = self.__class__.transpose_and_flip_spline(border2, self.transpose_2_to_1[i], self.flip_2_to_1[i])
+            borders2_turned_and_fliped.append(border2_turned_and_fliped)
+        return borders1, borders2_turned_and_fliped
+    
+    def compute_border_couple_DN(self, couple_ind: int, splines: list[BSpline], XI2_border: list[np.ndarray], k2: Union[int, list[int]]=0):
+        spline1 = splines[self.spline1_inds[couple_ind]]
+        spline2 = splines[self.spline2_inds[couple_ind]]
+        XI2 = XI2_border[:self.axes2[couple_ind]] + [np.array([spline2.bases[self.axes2[couple_ind]].span[int(self.front_sides2[couple_ind])]])] + XI2_border[self.axes2[couple_ind]:]
+        XI1_border = self.__class__.transpose_and_flip_knots(XI2_border, spline1.getSpans(), self.transpose_2_to_1[couple_ind], self.flip_2_to_1[couple_ind])
+        XI1 = XI1_border[:self.axes1[couple_ind]] + [np.array([spline1.bases[self.axes1[couple_ind]].span[int(self.front_sides1[couple_ind])]])] + XI1_border[self.axes1[couple_ind]:]
+        if isinstance(k2, Iterable):
+            k1 = k2[:self.axes2[couple_ind]] + k2[(self.axes2[couple_ind] + 1):]
+            k1 = [k1[i] for i in self.transpose_2_to_1[couple_ind]]
+            k1 = k1[:self.axes1[couple_ind]] + [k2[self.axes2[couple_ind]]] + k1[self.axes1[couple_ind]:]
+        else:
+            k1 = k2
+        DN1 = spline1.DN(XI1, k=k1)
+        DN2 = spline2.DN(XI2, k=k2)
+        return DN1, DN2
+    
+    # def compute_border_couple_DN(self, splines: list[BSpline], XI: list[list[np.ndarray]], k2: Union[int, list[int]]=0):
+    #     DN1 = []
+    #     DN2_turned_and_fliped = []
+    #     for i in range(self.nb_couples):
+    #         spline1 = splines[self.spline1_inds[i]]
+    #         axis1 = self.axes1[i]
+    #         XI1 = XI[self.spline1_inds[i]][:axis1] + [np.array([spline1.bases[axis1].span[int(self.front_sides1[i])]])] + XI[self.spline1_inds[i]][(axis1 + 1):]
+    #         
+    #         spline2 = splines[self.spline2_inds[i]]
+    #         axis2 = self.axes2[i]
+    #         XI2 = XI[self.spline2_inds[i]][:axis2] + [np.array([spline2.bases[axis2].span[int(self.front_sides2[i])]])] + XI[self.spline2_inds[i]][(axis2 + 1):]
+    #         XI2_turned_and_flipped = self.__class__.transpose_and_flip_knots(XI2, spans, transpose, flip)
+    #         border1 = self.__class__.extract_border_spline(splines[self.spline1_inds[i]], self.axes1[i], self.front_sides1[i])
+    #         borders1.append(border1)
+    #         border2 = self.__class__.extract_border_spline(splines[self.spline2_inds[i]], self.axes2[i], self.front_sides2[i])
+    #         border2_turned_and_fliped = self.__class__.transpose_and_flip_spline(border2, self.transpose_2_to_1[i], self.flip_2_to_1[i])
+    #         borders2_turned_and_fliped.append(border2_turned_and_fliped)
+    #     return borders1, borders2_turned_and_fliped
+    
+    def compute_border_couple_DN(self, couple_ind: int, splines: list[BSpline], XI1_border: list[np.ndarray], k1: Union[int, list[int]]=0):
+
+        spline1 = splines[self.spline1_inds[couple_ind]]
+        spline2 = splines[self.spline2_inds[couple_ind]]
+        
+        print(f"XI1_border: {XI1_border}")
+        
+        XI1 = XI1_border[:self.axes1[couple_ind]] + [np.array([spline1.bases[self.axes1[couple_ind]].span[int(self.front_sides1[couple_ind])]])] + XI1_border[self.axes1[couple_ind]:]
+        print(f"XI1: {XI1}")
+        
+        XI2_border = self.__class__.transpose_and_flip_back_knots(XI1_border, spline2.getSpans(), self.transpose_2_to_1[couple_ind], self.flip_2_to_1[couple_ind])
+        print(f"XI2_border: {XI2_border}")
+        
+        XI2 = XI2_border[:self.axes2[couple_ind]] + [np.array([spline2.bases[self.axes2[couple_ind]].span[int(self.front_sides2[couple_ind])]])] + XI2_border[self.axes2[couple_ind]:]
+        print(f"XI1: {XI1}")
+        
+        if isinstance(k1, Iterable):
+            k1 = list(k1)
+            k2 = k1[:self.axes1[couple_ind]] + k1[(self.axes1[couple_ind] + 1):]
+            k2 = [k2[i] for i in np.argsort(self.transpose_2_to_1[couple_ind])]
+            k2 = k2[:self.axes2[couple_ind]] + [k1[self.axes1[couple_ind]]] + k2[self.axes2[couple_ind]:]
+            print(f"k2 (from Iterable): {k2}")
+        else:
+            k2 = k1
+            print(f"k2 (from int): {k2}")
+            
+        DN1 = spline1.DN(XI1, k=k1)
+        DN2 = spline2.DN(XI2, k=k2)
+        return DN1, DN2
+
+
+from bsplyne import BSpline
+
+spl1 = BSpline([2, 2], [np.array([0, 0, 0, 0.5, 1, 1, 1]), np.array([0, 0, 0, 0.5, 1, 1, 1])])
+ctrl1 = np.array(np.meshgrid(np.linspace(0, 1, 4), np.linspace(0, 1, 4), indexing='ij'))
+spl2 = BSpline([2, 2], [np.array([0, 0, 0, 0.5, 1, 1, 1]), np.array([0, 0, 0, 0.5, 1, 1, 1])])
+ctrl2 = np.array(np.meshgrid(np.linspace(1, 2, 4), np.linspace(1, 0, 4), indexing='ij'))
+spl2.plot(ctrl2)
+ctrls = [ctrl1, ctrl2]
+spls = [spl1, spl2]
+
+cpl = CouplesBSplineBorder.from_splines(ctrls, spls)
+conn = cpl.get_connectivity(np.array([[4, 4], [4, 4]]))
+[border], _ = cpl.get_borders_couples_splines(spls)
+XI, dXI = border.gauss_legendre_for_integration([1])
+N1, N2 = cpl.compute_border_couple_DN(0, spls, list(XI))
+ctrl1.reshape((2, -1))@N1.T, ctrl2.reshape((2, -1))@N2.T
+
+# %%
 
 if __name__=="__main__":
     

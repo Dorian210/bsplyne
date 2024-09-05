@@ -1,0 +1,7 @@
+matplotlib
+meshio
+numba
+numpy
+scipy
+tqdm
+wide_product

@@ -1,8 +1,10 @@
 import os
 import re
+from typing import Iterable, Union
 import xml.dom.minidom
 
 import numpy as np
+import numpy.typing as npt
 import scipy.sparse as sps
 from wide_product import wide_product
 import meshio as io
@@ -227,6 +229,46 @@ class BSpline:
         dXI = tuple(dXI)
         return XI, dXI
     
+    def gauss_legendre_for_integration(self, n_eval_per_elem=None, bounding_box=None):
+        """
+        Generate a set of xi values with their coresponding weight acording to the Gauss Legendre 
+        integration method over a given bounding box.
+
+        Parameters
+        ----------
+        n_eval_per_elem : numpy.array of int, optional
+            Number of values per element over each parametric axis, by default `self.getDegrees() + 1`
+        bounding_box : numpy.array of float, optional
+            Lower and upper bounds, by default `self`.`span`
+
+        Returns
+        -------
+        XI : tuple of numpy.array of float
+            Set of xi values over each span.
+        dXI : tuple of numpy.array of float
+            Set of integration weight of each point in `XI`.
+        """
+        if n_eval_per_elem is None:
+            n_eval_per_elem = self.getDegrees() + 1
+        if bounding_box is None:
+            bounding_box = [None]*self.NPa # type: ignore
+        XI = []
+        dXI = []
+        for basis, (n_eval_per_elem_axis, bb) in zip(self.bases, zip(n_eval_per_elem, bounding_box)): # type: ignore
+            xi, dxi = basis.gauss_legendre_for_integration(n_eval_per_elem_axis, bb)
+            XI.append(xi)
+            dXI.append(dxi)
+        XI = tuple(XI)
+        dXI = tuple(dXI)
+        return XI, dXI
+    
+    def normalize_knots(self):
+        """
+        Maps the knots vectors to [0, 1].
+        """
+        for basis in self.bases:
+            basis.normalize_knots()
+    
     def DN(self, XI, k=0):
         """
         Compute the `k`-th derivative of the B-spline basis at the points 
@@ -279,8 +321,10 @@ class BSpline:
         if isinstance(XI, np.ndarray):
             fct = wide_product
             XI = XI.reshape((self.NPa, -1))
+            s1 = XI.shape[1]
         else:
             fct = sps.kron
+            s1 = 1
         
         if isinstance(k, int):
             if k==0:
@@ -301,14 +345,14 @@ class BSpline:
                 k_arr[u] = c
                 key = tuple(k_arr)
                 if key not in dic:
-                    dic[key] = np.ones((1, 1))
+                    dic[key] = np.ones((s1, 1))
                     for idx in range(self.NPa):
                         k_querry = k_arr[idx]
                         dic[key] = fct(dic[key], dkbasis_dxik[idx, k_querry])
                 DN[axes] = dic[key]
             return DN
         else:
-            DN = np.ones((1, 1))
+            DN = np.ones((s1, 1))
             for idx in range(self.NPa):
                 basis = self.bases[idx]
                 k_idx = k[idx]
@@ -386,17 +430,14 @@ class BSpline:
         DN = self.DN(XI, k)
         NPh = ctrlPts.shape[0]
         if isinstance(DN, np.ndarray):
-            values = np.empty((NPh, *DN.shape, *XI_shape), dtype='float')
-            slice_before = slice(0, NPh)
-            slices_after = [slice(0, xi_shape) for xi_shape in XI_shape]
+            values = np.empty((*DN.shape, NPh, *XI_shape), dtype='float')
             for axes in np.ndindex(*DN.shape):
-                indices = (slice_before, *axes, *slices_after)
-                values[indices] = (DN @ ctrlPts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
+                values[axes] = (DN[axes] @ ctrlPts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
         else:
             values = (DN @ ctrlPts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
         return values
     
-    def knotInsertion(self, ctrlPts, knots_to_add):
+    def knotInsertion(self, ctrlPts, knots_to_add: Iterable[Union[npt.NDArray[np.float_], int]]):
         """
         Add the knots passed in parameter to the knot vector and modify the 
         attributes so that the evaluation of the spline stays the same.
@@ -406,9 +447,12 @@ class BSpline:
         ctrlPts : numpy.array of float
             Contains the control points of the B-spline as [X, Y, Z, ...].
             Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
-        knots_to_add : list of np.array of float
-            Contains the knots to add. It must not contain knots outside of 
-            the old knot vector's interval.
+        knots_to_add : Iterable[Union[npt.NDArray[np.float_], int]]
+            Refinement on each axis :
+            If `NDArray`, contains the knots to add on said axis. It must not 
+            contain knots outside of the old knot vector's interval.
+            If `int`, correspond to the number of knots to add in each B-spline 
+            element.
 
         Returns
         -------
@@ -429,6 +473,17 @@ class BSpline:
         >>> ctrlPts = pline.knotInsertion(ctrlPts, knots_to_add)
 
         """
+        true_knots_to_add = []
+        for axis, knots_to_add_elem in enumerate(knots_to_add):
+            if isinstance(knots_to_add_elem, int): # It is a number of knots to add in each element
+                u_knot = np.unique(self.bases[axis].knot)
+                a, b = u_knot[:-1, None], u_knot[1:, None]
+                mu = np.linspace(0, 1, knots_to_add_elem + 1, endpoint=False)[None, 1:]
+                true_knots_to_add.append((a + (b - a)*mu).ravel())
+            else:
+                true_knots_to_add.append(knots_to_add_elem)
+        knots_to_add = true_knots_to_add
+        
         pts_shape = np.empty(self.NPa, dtype='int')
         D = None
         for idx in range(self.NPa):
@@ -947,6 +1002,108 @@ class BSpline:
             _writePVD(os.path.join(path, name), groups)
         
         return groups
+    
+    def getGeomdl(self, ctrl_pts):
+        try:
+            from geomdl import BSpline as geomdlBS
+        except:
+            raise 
+        if self.NPa==1:
+            curve = geomdlBS.Curve()
+            curve.degree = self.bases[0].p
+            curve.ctrlpts = ctrl_pts.T.tolist()
+            curve.knotvector = self.bases[0].knot
+            return curve
+        elif self.NPa==2:
+            surf = geomdlBS.Surface()
+            surf.degree_u = self.bases[0].p
+            surf.degree_v = self.bases[1].p
+            surf.ctrlpts2d = ctrl_pts.transpose((1, 2, 0)).tolist()
+            surf.knotvector_u = self.bases[0].knot
+            surf.knotvector_v = self.bases[1].knot
+            return surf
+        elif self.NPa==3:
+            vol = geomdlBS.Volume()
+            vol.degree_u = self.bases[0].p
+            vol.degree_v = self.bases[1].p
+            vol.degree_w = self.bases[2].p
+            vol.cpsize = ctrl_pts.shape[1:]
+            # ctrl_pts format (zeta, xi, eta)
+            vol.ctrlpts = ctrl_pts.transpose(3, 1, 2, 0).reshape((-1, ctrl_pts.shape[0])).tolist()
+            vol.knotvector_u = self.bases[0].knot
+            vol.knotvector_v = self.bases[1].knot
+            vol.knotvector_w = self.bases[2].knot
+            return vol
+        else:
+            raise NotImplementedError("Can only export curves, sufaces or volumes !")
+    
+    def plotPV(self, ctrl_pts):
+        pass
+    
+    def plotMPL(self, ctrl_pts, n_eval_per_elem=10, ax=None, ctrl_color='g', interior_color='b', elem_color='r'):
+        import matplotlib.pyplot as plt
+        from matplotlib.collections import LineCollection
+        from matplotlib.patches import Polygon
+        NPh = ctrl_pts.shape[0]
+        fig = plt.figure() if ax is None else ax.get_figure()
+        if NPh==2:
+            ax = fig.add_subplot() if ax is None else ax
+            if self.NPa==1:
+                ax.plot(ctrl_pts[0], ctrl_pts[1], "-o" + ctrl_color, label="Control mesh", zorder=0)
+                xi, = self.linspace(n_eval_per_elem=n_eval_per_elem)
+                x, y = self.__call__(ctrl_pts, [xi])
+                ax.plot(x, y, c=interior_color, label="B-spline", zorder=1)
+                xi_elem, = self.linspace(n_eval_per_elem=1)
+                x_elem, y_elem = self.__call__(ctrl_pts, [xi_elem])
+                ax.scatter(x_elem, y_elem, marker='*', c=elem_color, label="Elements borders", zorder=2) # type: ignore
+            elif self.NPa==2:
+                xi, eta = self.linspace(n_eval_per_elem=n_eval_per_elem)
+                xi_elem, eta_elem = self.linspace(n_eval_per_elem=1)
+                x_xi, y_xi = self.__call__(ctrl_pts, [xi_elem, eta])
+                x_eta, y_eta = self.__call__(ctrl_pts, [xi, eta_elem])
+                x_pol = np.hstack((x_xi[ 0, :: 1], x_eta[:: 1, -1], x_xi[-1, ::-1], x_eta[::-1,  0]))
+                y_pol = np.hstack((y_xi[ 0, :: 1], y_eta[:: 1, -1], y_xi[-1, ::-1], y_eta[::-1,  0]))
+                xy_pol = np.hstack((x_pol[:, None], y_pol[:, None]))
+                ax.add_patch(Polygon(xy_pol, fill=True, edgecolor=None, facecolor=interior_color, alpha=0.25, label="B-spline", zorder=0)) # type: ignore
+                ax.plot(ctrl_pts[0, 0, 0], ctrl_pts[1, 0, 0], "-o" + ctrl_color, label="Control mesh", zorder=1, ms=plt.rcParams['lines.markersize']/2)
+                ax.add_collection(LineCollection(ctrl_pts.transpose(1, 2, 0), colors=ctrl_color, zorder=1)) # type: ignore
+                ax.add_collection(LineCollection(ctrl_pts.transpose(2, 1, 0), colors=ctrl_color, zorder=1)) # type: ignore
+                ax.plot(ctrl_pts[0].ravel(), ctrl_pts[1].ravel(), ctrl_color + "o", zorder=1, ms=plt.rcParams['lines.markersize']/2) # type: ignore
+                ax.plot(x_xi[0, 0], y_xi[0, 0], "-" + elem_color, label="Elements borders", zorder=2)
+                ax.add_collection(LineCollection(np.array([x_xi, y_xi]).transpose(1, 2, 0), colors='r', zorder=2)) # type: ignore
+                ax.add_collection(LineCollection(np.array([x_eta, y_eta]).transpose(2, 1, 0), colors='r', zorder=2)) # type: ignore
+            else:
+                raise ValueError(f"Can't plot a {self.NPa} shape in a 2D space.")
+            ax.legend()
+            ax.set_aspect(1)
+        elif NPh==3:
+            ax = fig.add_subplot(projection='3d') if ax is None else ax
+            if self.NPa==1:
+                pass
+            elif self.NPa==2:
+                fig = plt.figure()
+                
+
+                # Make data
+                u = np.linspace(0, 2 * np.pi, 100)
+                v = np.linspace(0, np.pi, 100)
+                x = 10 * np.outer(np.cos(u), np.sin(v))
+                y = 10 * np.outer(np.sin(u), np.sin(v))
+                z = 10 * np.outer(np.ones(np.size(u)), np.cos(v))
+
+                # Plot the surface
+                ax.plot_surface(x, y, z)
+
+                # Set an equal aspect ratio
+                ax.set_aspect('equal')
+
+                plt.show()
+            elif self.NPa==3:
+                pass
+            else:
+                raise ValueError(f"Can't plot a {self.NPa} shape in a 3D space.")
+        else:
+            raise ValueError(f"Can't plot in a {NPh}D space.")
 
 def _writePVD(fileName, groups):
     """

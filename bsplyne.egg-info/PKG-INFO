@@ -1,0 +1,16 @@
+Metadata-Version: 2.1
+Name: bsplyne
+Version: 1.0.0
+Summary: A package for N dimensions B-splines.
+Home-page: https://github.com/Dorian210/bsplyne
+Author: Dorian Bichet
+Author-email: dbichet@insa-toulouse.fr
+License: UNKNOWN
+Description: # bsplyne
+        A package for N dimensions B-splines.
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Classifier: License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)
+Description-Content-Type: text/markdown
