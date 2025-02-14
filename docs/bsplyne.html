@@ -24,7 +24,15 @@
 
             <h2>Contents</h2>
             <ul>
-  <li><a href="#bsplyne">bsplyne</a></li>
+  <li><a href="#bsplyne">bsplyne</a>
+  <ul>
+    <li><a href="#installation">Installation</a></li>
+    <li><a href="#main-modules">Main Modules</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#documentation">Documentation</a></li>
+    <li><a href="#contributions">Contributions</a></li>
+    <li><a href="#license">License</a></li>
+  </ul></li>
 </ul>
 
 
@@ -52,7 +60,75 @@ bsplyne    </h1>
 
                         <div class="docstring"><h1 id="bsplyne">bsplyne</h1>
 
-<p>A package for N dimensions B-splines.</p>
+<p><strong>bsplyne</strong> is a Python library for working with N-dimensional B-splines. It implements the Cox-de Boor algorithm for basis evaluation, order elevation, knot insertion, and provides a connectivity class for multi-patch structures. Additionally, it includes visualization tools with export capabilities to Paraview.</p>
+
+<blockquote>
+  <p><strong>Note:</strong> This library is not yet available on PyPI. To install, please clone the repository and install it manually.</p>
+</blockquote>
+
+<h2 id="installation">Installation</h2>
+
+<p>Since <strong>bsplyne</strong> is not yet on PyPI, you can install it locally as follows:</p>
+
+<div class="pdoc-code codehilite">
+<pre><span></span><code>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/Dorian210/bsplyne
+<span class="nb">cd</span><span class="w"> </span>bsplyne
+pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</code></pre>
+</div>
+
+<h3 id="dependencies">Dependencies</h3>
+
+<p>Make sure you have the following dependencies installed:</p>
+
+<ul>
+<li><code>numpy</code></li>
+<li><code>numba</code></li>
+<li><code>scipy</code></li>
+<li><code>matplotlib</code></li>
+<li><code>wide_product</code></li>
+<li><code>meshio</code></li>
+<li><code>tqdm</code></li>
+<li><code>pathos</code></li>
+</ul>
+
+<h2 id="main-modules">Main Modules</h2>
+
+<ul>
+<li><p><strong>BSplineBasis</strong><br />
+Implements B-spline basis function evaluation using the Cox-de Boor recursion formula.</p></li>
+<li><p><strong>BSpline</strong><br />
+Provides methods for creating and manipulating N-dimensional B-splines, including order elevation and knot insertion.</p></li>
+<li><p><strong>MultiPatchBSplineConnectivity</strong><br />
+Manages the connectivity between multiple N-dimensional B-spline patches.</p></li>
+<li><p><strong>CouplesBSplineBorder</strong> (less documented)<br />
+Handles coupling between B-spline borders.</p></li>
+</ul>
+
+<h2 id="examples">Examples</h2>
+
+<p>Several example scripts demonstrating the usage of <strong>bsplyne</strong> can be found in the <code>examples/</code> directory. These scripts cover:</p>
+
+<ul>
+<li>Basis evaluation on a curved line</li>
+<li>Plotting with Matplotlib</li>
+<li>Order elevation</li>
+<li>Knot insertion</li>
+<li>Surface examples</li>
+<li>Exporting to Paraview</li>
+</ul>
+
+<h2 id="documentation">Documentation</h2>
+
+<p>The full API documentation is available in the <code>docs/</code> directory of the project or via the <a href="https://dorian210.github.io/bsplyne/bsplyne.html">online documentation portal</a>.</p>
+
+<h2 id="contributions">Contributions</h2>
+
+<p>At the moment, I am not actively reviewing contributions. However, if you encounter issues or have suggestions, feel free to open an issue.</p>
+
+<h2 id="license">License</h2>
+
+<p>This project is licensed under the <a href="LICENSE.txt">CeCILL License</a>.</p>
 </div>
 
                         <input id="mod-bsplyne-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
