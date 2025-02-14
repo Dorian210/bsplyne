@@ -1,16 +1,46 @@
 # %%
 import os
 from itertools import permutations
-from functools import lru_cache
-from typing import Union, Iterable
+from pathos.multiprocessing import ProcessingPool as Pool
 
 import numpy as np
-import scipy.sparse as sps
-from tqdm import trange
+import numba as nb
+from tqdm import tqdm
 
-from .b_spline import BSpline
+from .b_spline import BSpline, _writePVD
 from .b_spline_basis import BSplineBasis
-from .save_YETI import Domain, write
+# from .save_YETI import Domain, write
+
+# union-find algorithm for connectivity
+@nb.njit
+def find(parent, x):
+    if parent[x] != x:
+        parent[x] = find(parent, parent[x])
+    return parent[x]
+
+@nb.njit
+def union(parent, rank, x, y):
+    rootX = find(parent, x)
+    rootY = find(parent, y)
+    if rootX != rootY:
+        if rank[rootX] > rank[rootY]:
+            parent[rootY] = rootX
+        elif rank[rootX] < rank[rootY]:
+            parent[rootX] = rootY
+        else:
+            parent[rootY] = rootX
+            rank[rootX] += 1
+
+@nb.njit
+def get_unique_nodes_inds(nodes_couples, nb_nodes):
+    parent = np.arange(nb_nodes)
+    rank = np.zeros(nb_nodes, dtype=np.int32)
+    for a, b in nodes_couples:
+        union(parent, rank, a, b)
+    unique_nodes_inds = np.empty(nb_nodes, dtype=np.int32)
+    for i in range(nb_nodes):
+        unique_nodes_inds[i] = find(parent, i)
+    return unique_nodes_inds
 
 class MultiPatchBSplineConnectivity:
     """
@@ -80,28 +110,15 @@ class MultiPatchBSplineConnectivity:
         MultiPatchBSplineConnectivity
             Instance of `MultiPatchBSplineConnectivity` created.
         """
-        dic = {}
-        for a, b in nodes_couples:
-            if a in dic:
-                dic[a].append(b)
-            else:
-                dic[a] = [b]
-            if b in dic:
-                dic[b].append(a)
-            else:
-                dic[b] = [a]
         nb_nodes = np.sum(np.prod(shape_by_patch, axis=1))
-        unique_nodes_inds = np.arange(nb_nodes)
-        for key, values in dic.items():
-            for v in values:
-                unique_nodes_inds[v] = unique_nodes_inds[key]
+        unique_nodes_inds = get_unique_nodes_inds(nodes_couples, nb_nodes)
         different_unique_nodes_inds, inverse = np.unique(unique_nodes_inds, return_inverse=True)
         unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], different_unique_nodes_inds))) - 1)[inverse]
         nb_unique_nodes = np.unique(unique_nodes_inds).size
         return cls(unique_nodes_inds, shape_by_patch, nb_unique_nodes)
     
     @classmethod
-    def from_separated_ctrlPts(cls, separated_ctrlPts, eps=1e-10):
+    def from_separated_ctrlPts(cls, separated_ctrlPts, eps=1e-10, return_nodes_couples: bool=False):
         """
         Create the connectivity from a list of control points given as 
         a separated field by comparing every couple of points.
@@ -114,6 +131,8 @@ class MultiPatchBSplineConnectivity:
             (``NPh``, nb elem for dim 1, ..., nb elem for dim ``npa``)
         eps : float, optional
             Maximum distance between two points to be considered the same, by default 1e-10
+        return_nodes_couples : bool, optional
+            If `True`, returns the `nodes_couples` created, by default False
 
         Returns
         -------
@@ -144,7 +163,10 @@ class MultiPatchBSplineConnectivity:
             nodes_couples = np.vstack(nodes_couples)
         else:
             nodes_couples = np.empty((0, 2), dtype='int')
-        return cls.from_nodes_couples(nodes_couples, shape_by_patch)
+        if return_nodes_couples:
+            return cls.from_nodes_couples(nodes_couples, shape_by_patch), nodes_couples
+        else:
+            return cls.from_nodes_couples(nodes_couples, shape_by_patch)
     
     def unpack(self, unique_field):
         """
@@ -292,12 +314,43 @@ class MultiPatchBSplineConnectivity:
             raise ValueError(f'Representation "{representation}" not recognised. Representation must either be "unique", "unpacked", or "separated" !')
     
     def get_duplicate_unpacked_nodes_mask(self):
+        """
+        Returns a boolean mask indicating which nodes in the unpacked representation are duplicates.
+
+        Returns
+        -------
+        duplicate_nodes_mask : numpy.ndarray
+            Boolean mask of shape (nb_nodes,) where True indicates a node is duplicated 
+            across multiple patches and False indicates it appears only once.
+        """
         unique, inverse, counts = np.unique(self.unique_nodes_inds, return_inverse=True, return_counts=True)
         duplicate_nodes_mask = np.zeros(self.nb_nodes, dtype='bool')
         duplicate_nodes_mask[counts[inverse]>1] = True
         return duplicate_nodes_mask
     
     def extract_exterior_borders(self, splines):
+        """
+        Extract exterior borders from B-spline patches.
+
+        Parameters
+        ----------
+        splines : list[BSpline]
+            Array of B-spline patches to extract borders from.
+
+        Returns
+        -------
+        border_connectivity : MultiPatchBSplineConnectivity
+            Connectivity information for the border patches.
+        border_splines : list[BSpline]
+            Array of B-spline patches representing the borders.
+        border_unique_to_self_unique_connectivity : numpy.ndarray of int
+            Array mapping border unique nodes to original unique nodes.
+
+        Raises
+        ------
+        AssertionError
+            If isoparametric space dimension is less than 2.
+        """
         if self.npa<=1:
             raise AssertionError("The parametric space must be at least 2D to extract borders !")
         duplicate_unpacked_nodes_mask = self.get_duplicate_unpacked_nodes_mask()
@@ -342,6 +395,28 @@ class MultiPatchBSplineConnectivity:
         return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
     
     def extract_interior_borders(self, splines):
+        """
+        Extract interior borders from B-spline patches where nodes are shared between patches.
+
+        Parameters
+        ----------
+        splines : list[BSpline]
+            Array of B-spline patches to extract borders from.
+
+        Returns
+        -------
+        border_connectivity : MultiPatchBSplineConnectivity
+            Connectivity information for the border patches.
+        border_splines : list[BSpline]
+            Array of B-spline patches representing the borders.
+        border_unique_to_self_unique_connectivity : numpy.ndarray of int
+            Array mapping border unique nodes to original unique nodes.
+
+        Raises
+        ------
+        AssertionError
+            If parametric space dimension is less than 2.
+        """
         if self.npa<=1:
             raise AssertionError("The parametric space must be at least 2D to extract borders !")
         duplicate_unpacked_nodes_mask = self.get_duplicate_unpacked_nodes_mask()
@@ -465,6 +540,25 @@ class MultiPatchBSplineConnectivity:
     #     return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
     
     def subset(self, splines, patches_to_keep):
+        """
+        Create a subset of the multi-patch B-spline connectivity by keeping only selected patches.
+
+        Parameters
+        ----------
+        splines : list[BSpline]
+            Array of B-spline patches to subset.
+        patches_to_keep : numpy.array of int
+            Indices of patches to keep in the subset.
+
+        Returns
+        -------
+        new_connectivity : MultiPatchBSplineConnectivity
+            New connectivity object containing only the selected patches.
+        new_splines : list[BSpline]
+            Array of B-spline patches for the selected patches.
+        new_unique_to_self_unique_connectivity : numpy.ndarray of int
+            Array mapping new unique nodes to original unique nodes.
+        """
         new_splines = splines[patches_to_keep]
         separated_unique_nodes_inds = self.unique_field_indices(())
         new_unique_nodes_inds = np.concatenate([separated_unique_nodes_inds[patch].flat for patch in patches_to_keep])
@@ -475,14 +569,64 @@ class MultiPatchBSplineConnectivity:
         new_connectivity = self.__class__(new_unique_nodes_inds, new_shape_by_patch, new_nb_unique_nodes)
         return new_connectivity, new_splines, new_unique_to_self_unique_connectivity
     
-    def save_paraview(self, splines, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True):
+    def save_block(self, splines, block, separated_ctrl_pts, path, name, n_step, n_eval_per_elem, separated_fields, fiels_on_interior_only):
+        """
+        Process a block of patches, saving the meshes in their corresponding file.
+        Each block has its own progress bar.
+        """
+        with tqdm(total=len(block), desc=f"Saving Block {block[0]}-{block[-1]}") as block_pbar:
+            for i, patch in enumerate(block):
+                groups = {"interior": {"ext": "vtu", "npart": patch, "nstep": n_step}, 
+                        "elements_borders": {"ext": "vtu", "npart": patch, "nstep": n_step}, 
+                        "control_points": {"ext": "vtu", "npart": patch, "nstep": n_step}}
+                splines[i].saveParaview(separated_ctrl_pts[i], 
+                                            path, 
+                                            name, 
+                                            n_step=n_step, 
+                                            n_eval_per_elem=n_eval_per_elem, 
+                                            fields=separated_fields[i], 
+                                            groups=groups, 
+                                            make_pvd=False, 
+                                            verbose=False, 
+                                            fiels_on_interior_only=fiels_on_interior_only)
+                block_pbar.update(1)
+    
+    def save_paraview(self, splines, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True, fields_on_interior_only=True):
+        """
+        Save the multipatch B-spline data to Paraview format using parallel processing.
+
+        Parameters
+        ----------
+        splines : list[BSpline]
+            Array of B-spline patches to save
+        separated_ctrl_pts : list[numpy.ndarray]
+            Control points for each patch in separated representation
+        path : str
+            Directory path where files will be saved
+        name : str
+            Base name for the saved files
+        n_step : int, optional
+            Number of time steps, by default 1
+        n_eval_per_elem : int or list[int], optional
+            Number of evaluation points per element, by default 10
+        unique_fields : dict, optional
+            Fields in unique representation to save, by default {}
+        separated_fields : list[dict], optional
+            Fields in separated representation to save, by default None
+        verbose : bool, optional
+            Whether to show progress bars, by default True
+        fields_on_interior_only : bool, optional
+            Whether to save fields on interior only, by default True
+
+        Raises
+        ------
+        NotImplementedError
+            If a callable is passed in unique_fields
+        ValueError
+            If pool is not running and cannot be restarted
+        """
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.npa
-        
-        if verbose:
-            iterator = trange(self.nb_patchs, desc=("Saving " + name))
-        else:
-            iterator = range(self.nb_patchs)
         
         if separated_fields is None:
             separated_fields = [{} for _ in range(self.nb_patchs)]
@@ -495,64 +639,75 @@ class MultiPatchBSplineConnectivity:
                 for patch in range(self.nb_patchs):
                     separated_fields[patch][key] = separated_value[patch]
         
-        groups = {}
-        for patch in iterator:
-            groups = splines[patch].saveParaview(separated_ctrl_pts[patch], 
-                                                      path, 
-                                                      name, 
-                                                      n_step=n_step, 
-                                                      n_eval_per_elem=n_eval_per_elem, 
-                                                      fields=separated_fields[patch], 
-                                                      groups=groups, 
-                                                      make_pvd=((patch + 1)==self.nb_patchs), 
-                                                      verbose=False)
-    
-    def save_YETI(self, splines, separated_ctrl_pts, path, name):
-        if self.npa==2:
-            el_type = "U3"
-        elif self.npa==3:
-            el_type = "U1"
-        else:
-            raise NotImplementedError("Can only save surfaces or volumes !")
-        objects_list = []
-        for patch in range(self.nb_patchs):
-            geomdl_patch = splines[patch].getGeomdl(separated_ctrl_pts[patch])
-            obj = Domain.DefaultDomain(geometry=geomdl_patch,
-                                       id_dom=patch,
-                                       elem_type=el_type)
-            objects_list.append(obj)
-        write.write_files(objects_list, os.path.join(path, name))
-        
+        num_blocks = min(int(os.cpu_count()), self.nb_patchs)
+        patch_indices = patch_indices = [block for block in np.array_split(range(self.nb_patchs), num_blocks) if block.size!=0]
+        pool = Pool(num_blocks)
 
-if __name__=='__main__':
-    from bsplyne_lib import new_cube
+        try:
+            success = False
+            while not success:
+                try:
+                    if verbose:
+                        list(tqdm(
+                            pool.uimap(
+                                self.save_block, 
+                                [splines[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
+                                patch_indices,
+                                [separated_ctrl_pts[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
+                                [path]*num_blocks, 
+                                [name]*num_blocks, 
+                                [n_step]*num_blocks, 
+                                [n_eval_per_elem]*num_blocks, 
+                                [separated_fields[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
+                                [fields_on_interior_only]*num_blocks),
+                            total=num_blocks,
+                            desc="Saving Blocks", 
+                            position=1,
+                        ))
+                    else:
+                        pool.map(self.save_block, 
+                                [splines[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
+                                patch_indices,
+                                [separated_ctrl_pts[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
+                                [path]*num_blocks, 
+                                [name]*num_blocks, 
+                                [n_step]*num_blocks, 
+                                [n_eval_per_elem]*num_blocks, 
+                                [separated_fields[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
+                                [fields_on_interior_only]*num_blocks)
+                    success = True  # Exit loop if no exception occurs
+                except ValueError as e:
+                    if str(e) == "Pool not running":
+                        pool.restart()  # Restart the pool and retry
+                    else:
+                        raise  # Re-raise any other exception
+        finally:
+            pool.close()
+            pool.join()
+        
+        groups = {"interior": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}, 
+                  "elements_borders": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}, 
+                  "control_points": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}}
+        _writePVD(os.path.join(path, name), groups)
     
-    cube1, cube1_ctrlPts = new_cube([0.5, 0.5, 0.5], [0, 0, 1], 1)
-    cube2, cube2_ctrlPts = new_cube([1.5, 0.5, 0.5], [1, 0, 0], 1)
-    splines = [cube1, cube2]
-    separated_ctrlPts = [cube1_ctrlPts, cube2_ctrlPts]
-    
-    connectivity = MultiPatchBSplineConnectivity.from_separated_ctrlPts(separated_ctrlPts)
-    
-    border_connectivity, border_splines, border_unique_to_self_unique_connectivity = connectivity.extract_exterior_borders(splines)
-    
-    print(connectivity.unique_field_indices((1,)))
-    print(border_connectivity.unique_field_indices((1,)))
+#     def save_YETI(self, splines, separated_ctrl_pts, path, name):
+#         if self.npa==2:
+#             el_type = "U3"
+#         elif self.npa==3:
+#             el_type = "U1"
+#         else:
+#             raise NotImplementedError("Can only save surfaces or volumes !")
+#         objects_list = []
+#         for patch in range(self.nb_patchs):
+#             geomdl_patch = splines[patch].getGeomdl(separated_ctrl_pts[patch])
+#             obj = Domain.DefaultDomain(geometry=geomdl_patch,
+#                                        id_dom=patch,
+#                                        elem_type=el_type)
+#             objects_list.append(obj)
+#         write.write_files(objects_list, os.path.join(path, name))
     
     
 # %%
-
-import os
-from itertools import permutations
-from functools import lru_cache
-from typing import Union, Iterable
-
-import numpy as np
-import scipy.sparse as sps
-from tqdm import trange
-
-from bsplyne import BSplineBasis, BSpline, MultiPatchBSplineConnectivity
-
 class CouplesBSplineBorder:
     
     def __init__(self, spline1_inds, spline2_inds, axes1, axes2, front_sides1, front_sides2, transpose_2_to_1, flip_2_to_1, NPa):
@@ -698,6 +853,45 @@ class CouplesBSplineBorder:
         flip_2_to_1 = np.array(flip_2_to_1, dtype='bool')
         return cls(spline1_inds, spline2_inds, axes1, axes2, front_sides1, front_sides2, transpose_2_to_1, flip_2_to_1, NPa)
     
+    def append(self, other):
+        if self.NPa!=other.NPa: raise ValueError(f"operands could not be concatenated with parametric spaces of dimensions {self.NPa} and {other.NPa}")
+        self.spline1_inds = np.concatenate((self.spline1_inds, other.spline1_inds), axis=0)
+        self.spline2_inds = np.concatenate((self.spline2_inds, other.spline2_inds), axis=0)
+        self.axes1 = np.concatenate((self.axes1, other.axes1), axis=0)
+        self.axes2 = np.concatenate((self.axes2, other.axes2), axis=0)
+        self.front_sides1 = np.concatenate((self.front_sides1, other.front_sides1), axis=0)
+        self.front_sides2 = np.concatenate((self.front_sides2, other.front_sides2), axis=0)
+        self.transpose_2_to_1 = np.concatenate((self.transpose_2_to_1, other.transpose_2_to_1), axis=0)
+        self.flip_2_to_1 = np.concatenate((self.flip_2_to_1, other.flip_2_to_1), axis=0)
+        self.nb_couples += other.nb_couples
+    
+    def get_operator_allxi1_to_allxi2(self, spans1, spans2, couple_ind):
+        ax1 = self.axes1[couple_ind]
+        ax2 = self.axes2[couple_ind]
+        front1 = self.front_sides1[couple_ind]
+        front2 = self.front_sides2[couple_ind]
+        transpose = self.transpose_2_to_1[couple_ind]
+        flip = self.flip_2_to_1[couple_ind]
+        
+        A = np.zeros((self.NPa, self.NPa), dtype='float')
+        A[ax2, ax1] = -1 if front1==front2 else 1
+        arr = np.arange(self.NPa)
+        j1 = np.hstack((arr[(ax1 + 1):], arr[:ax1]))
+        j2 = np.hstack((arr[(ax2 + 1):], arr[:ax2]))
+        A[j2[transpose], j1] = [-1 if f else 1 for f in flip]
+        b = np.zeros(self.NPa, dtype='float')
+        b[ax2] = (int(front1) + int(front2))*(1 if front2 else -1)
+        b[j2[transpose]] = [1 if f else 0 for f in flip]
+        
+        alpha1, beta1 = np.array(spans1).T
+        M1, p1 = np.diag(1/(beta1 - alpha1)), -alpha1/(beta1 - alpha1)
+        alpha2, beta2 = np.array(spans2).T
+        M2, p2 = np.diag(beta2 - alpha2), alpha2
+        b = p2 + M2@b + M2@A@p1
+        A = M2@A@M1
+        
+        return A, b
+    
     def get_connectivity(self, shape_by_patch):
         indices = []
         start = 0
@@ -738,404 +932,53 @@ class CouplesBSplineBorder:
             borders2_turned_and_fliped.append(border2_turned_and_fliped)
         return borders1, borders2_turned_and_fliped
     
-    def compute_border_couple_DN(self, couple_ind: int, splines: list[BSpline], XI2_border: list[np.ndarray], k2: Union[int, list[int]]=0):
+    def compute_border_couple_DN(self, couple_ind: int, splines: list[BSpline], XI1_border: list[np.ndarray], k1: list[int]):
         spline1 = splines[self.spline1_inds[couple_ind]]
+        ax1 = self.axes1[couple_ind]
+        front1 = self.front_sides1[couple_ind]
         spline2 = splines[self.spline2_inds[couple_ind]]
-        XI2 = XI2_border[:self.axes2[couple_ind]] + [np.array([spline2.bases[self.axes2[couple_ind]].span[int(self.front_sides2[couple_ind])]])] + XI2_border[self.axes2[couple_ind]:]
-        XI1_border = self.__class__.transpose_and_flip_knots(XI2_border, spline1.getSpans(), self.transpose_2_to_1[couple_ind], self.flip_2_to_1[couple_ind])
-        XI1 = XI1_border[:self.axes1[couple_ind]] + [np.array([spline1.bases[self.axes1[couple_ind]].span[int(self.front_sides1[couple_ind])]])] + XI1_border[self.axes1[couple_ind]:]
-        if isinstance(k2, Iterable):
-            k1 = k2[:self.axes2[couple_ind]] + k2[(self.axes2[couple_ind] + 1):]
-            k1 = [k1[i] for i in self.transpose_2_to_1[couple_ind]]
-            k1 = k1[:self.axes1[couple_ind]] + [k2[self.axes2[couple_ind]]] + k1[self.axes1[couple_ind]:]
-        else:
-            k1 = k2
+        ax2 = self.axes2[couple_ind]
+        front2 = self.front_sides2[couple_ind]
+        XI1 = XI1_border[(self.NPa - 1 - ax1):] + [np.array([spline1.bases[ax1].span[int(front1)]])] + XI1_border[:(self.NPa - 1 - ax1)]
+        transpose_back = np.argsort(self.transpose_2_to_1[couple_ind])
+        flip_back = self.flip_2_to_1[couple_ind][transpose_back]
+        spans = spline2.getSpans()[(ax2 + 1):] + spline2.getSpans()[:ax2]
+        XI2_border = [(sum(spans[i]) - XI1_border[transpose_back[i]]) if flip_back[i] else XI1_border[transpose_back[i]] for i in range(self.NPa - 1)]
+        XI2 = XI2_border[(self.NPa - 1 - ax2):] + [np.array([spline2.bases[ax2].span[int(front2)]])] + XI2_border[:(self.NPa - 1 - ax2)]
+        k2 = k1[:self.axes1[couple_ind]] + k1[(self.axes1[couple_ind] + 1):]
+        k2 = [k2[i] for i in transpose_back]
+        k2 = k2[:self.axes2[couple_ind]] + [k1[self.axes1[couple_ind]]] + k2[self.axes2[couple_ind]:]
         DN1 = spline1.DN(XI1, k=k1)
         DN2 = spline2.DN(XI2, k=k2)
         return DN1, DN2
     
-    # def compute_border_couple_DN(self, splines: list[BSpline], XI: list[list[np.ndarray]], k2: Union[int, list[int]]=0):
-    #     DN1 = []
-    #     DN2_turned_and_fliped = []
-    #     for i in range(self.nb_couples):
-    #         spline1 = splines[self.spline1_inds[i]]
-    #         axis1 = self.axes1[i]
-    #         XI1 = XI[self.spline1_inds[i]][:axis1] + [np.array([spline1.bases[axis1].span[int(self.front_sides1[i])]])] + XI[self.spline1_inds[i]][(axis1 + 1):]
-    #         
-    #         spline2 = splines[self.spline2_inds[i]]
-    #         axis2 = self.axes2[i]
-    #         XI2 = XI[self.spline2_inds[i]][:axis2] + [np.array([spline2.bases[axis2].span[int(self.front_sides2[i])]])] + XI[self.spline2_inds[i]][(axis2 + 1):]
-    #         XI2_turned_and_flipped = self.__class__.transpose_and_flip_knots(XI2, spans, transpose, flip)
-    #         border1 = self.__class__.extract_border_spline(splines[self.spline1_inds[i]], self.axes1[i], self.front_sides1[i])
-    #         borders1.append(border1)
-    #         border2 = self.__class__.extract_border_spline(splines[self.spline2_inds[i]], self.axes2[i], self.front_sides2[i])
-    #         border2_turned_and_fliped = self.__class__.transpose_and_flip_spline(border2, self.transpose_2_to_1[i], self.flip_2_to_1[i])
-    #         borders2_turned_and_fliped.append(border2_turned_and_fliped)
-    #     return borders1, borders2_turned_and_fliped
-    
-    def compute_border_couple_DN(self, couple_ind: int, splines: list[BSpline], XI1_border: list[np.ndarray], k1: Union[int, list[int]]=0):
-
+    def compute_border_couple_DN(self, couple_ind: int, splines: list[BSpline], XI1_border: list[np.ndarray], k1: list[int]):
         spline1 = splines[self.spline1_inds[couple_ind]]
-        spline2 = splines[self.spline2_inds[couple_ind]]
-        
-        print(f"XI1_border: {XI1_border}")
-        
-        XI1 = XI1_border[:self.axes1[couple_ind]] + [np.array([spline1.bases[self.axes1[couple_ind]].span[int(self.front_sides1[couple_ind])]])] + XI1_border[self.axes1[couple_ind]:]
-        print(f"XI1: {XI1}")
-        
-        XI2_border = self.__class__.transpose_and_flip_back_knots(XI1_border, spline2.getSpans(), self.transpose_2_to_1[couple_ind], self.flip_2_to_1[couple_ind])
-        print(f"XI2_border: {XI2_border}")
-        
-        XI2 = XI2_border[:self.axes2[couple_ind]] + [np.array([spline2.bases[self.axes2[couple_ind]].span[int(self.front_sides2[couple_ind])]])] + XI2_border[self.axes2[couple_ind]:]
-        print(f"XI1: {XI1}")
-        
-        if isinstance(k1, Iterable):
-            k1 = list(k1)
-            k2 = k1[:self.axes1[couple_ind]] + k1[(self.axes1[couple_ind] + 1):]
-            k2 = [k2[i] for i in np.argsort(self.transpose_2_to_1[couple_ind])]
-            k2 = k2[:self.axes2[couple_ind]] + [k1[self.axes1[couple_ind]]] + k2[self.axes2[couple_ind]:]
-            print(f"k2 (from Iterable): {k2}")
-        else:
-            k2 = k1
-            print(f"k2 (from int): {k2}")
-            
+        spans1 = spline1.getSpans()
+        ax1 = self.axes1[couple_ind]
+        front1 = self.front_sides1[couple_ind]
+        XI1 = XI1_border[(self.NPa - 1 - ax1):] + [np.array([spline1.bases[ax1].span[int(front1)]])] + XI1_border[:(self.NPa - 1 - ax1)]
         DN1 = spline1.DN(XI1, k=k1)
-        DN2 = spline2.DN(XI2, k=k2)
+        
+        spline2 = splines[self.spline2_inds[couple_ind]]
+        spans2 = spline2.getSpans()
+        ax2 = self.axes2[couple_ind]
+        front2 = self.front_sides2[couple_ind]
+        transpose = self.transpose_2_to_1[couple_ind]
+        A, b = self.get_operator_allxi1_to_allxi2(spans1, spans2, couple_ind)
+        XI2 = []
+        for i in range(self.NPa):
+            j = np.argmax(np.abs(A[i]))
+            XI2.append(A[i, j]*XI1[j] + b[i])
+        
+        k = int(sum(k1))
+        DN2 = spline2.DN(XI2, k=k)
+        if k!=0:
+            AT = 1
+            for i in range(k):
+                AT = np.tensordot(AT, A, 0)
+            AT = AT.transpose(*2*np.arange(k), *(2*np.arange(k) + 1))
+            DN2 = np.tensordot(DN2, AT, k)
+            i1 = np.repeat(np.arange(self.NPa), k1)
+            DN2 = DN2[tuple(i1.tolist())]
         return DN1, DN2
-
-
-from bsplyne import BSpline
-
-spl1 = BSpline([2, 2], [np.array([0, 0, 0, 0.5, 1, 1, 1]), np.array([0, 0, 0, 0.5, 1, 1, 1])])
-ctrl1 = np.array(np.meshgrid(np.linspace(0, 1, 4), np.linspace(0, 1, 4), indexing='ij'))
-spl2 = BSpline([2, 2], [np.array([0, 0, 0, 0.5, 1, 1, 1]), np.array([0, 0, 0, 0.5, 1, 1, 1])])
-ctrl2 = np.array(np.meshgrid(np.linspace(1, 2, 4), np.linspace(1, 0, 4), indexing='ij'))
-spl2.plot(ctrl2)
-ctrls = [ctrl1, ctrl2]
-spls = [spl1, spl2]
-
-cpl = CouplesBSplineBorder.from_splines(ctrls, spls)
-conn = cpl.get_connectivity(np.array([[4, 4], [4, 4]]))
-[border], _ = cpl.get_borders_couples_splines(spls)
-XI, dXI = border.gauss_legendre_for_integration([1])
-N1, N2 = cpl.compute_border_couple_DN(0, spls, list(XI))
-ctrl1.reshape((2, -1))@N1.T, ctrl2.reshape((2, -1))@N2.T
-
-# %%
-
-if __name__=="__main__":
-    
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from matplotlib.collections import LineCollection
-    from mpl_toolkits.mplot3d.art3d import Line3DCollection
-
-    from bsplyne import BSpline, MultiPatchBSplineConnectivity
-    
-    def plot_multipatch(ddl, connectivity):
-        if ddl.shape[0]==2:
-            fig, ax = plt.subplots()
-            line_col = LineCollection
-        elif ddl.shape[0]==3:
-            fig = plt.figure()
-            ax = fig.add_subplot(projection='3d')
-            line_col = Line3DCollection
-        else:
-            raise NotImplementedError(f"Physical space must be 2D or 3D, not {ddl.shape[0]}D !")
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-        pts = connectivity.separate(connectivity.unpack(ddl))
-        indices = connectivity.unique_field_indices(())
-        for i, (p, txt) in enumerate(zip(pts[::-1], indices[::-1])):
-            if 1==1:
-                ax.scatter(*p)
-                for j, t in enumerate(txt.flat):
-                    ax.text(*[x.flat[j] for x in p], t, size=20, zorder=10, color='k')
-                p = np.moveaxis(p, 0, -1)
-                for _ in range(connectivity.npa):
-                    ax.add_collection(line_col(p.reshape((-1, p.shape[-2], p.shape[-1])), colors=colors[i]))
-                    p = np.moveaxis(p, 0, -2)
-        plt.show()
-    
-    pts1 = np.array(np.meshgrid([0, 1], [0, 1, 2], [0, 1], indexing='ij')).transpose(0, 3, 2, 1)
-    # pts1 = np.concatenate((pts1, np.zeros_like(pts1[0])[None]))
-    sp1 = BSpline([1, 2, 1], [np.array([0, 0, 1, 1], dtype='float'), np.array([0, 0, 0, 1, 1, 1], dtype='float'), np.array([0, 0, 1, 1], dtype='float')])
-    pts2 = np.array(np.meshgrid([0, 2], [0, 1, 2], [0, 1], indexing='ij'))
-    # pts2 = np.concatenate((pts2, np.zeros_like(pts2[0])[None]))
-    sp2 = BSpline([1, 2, 1], [np.array([0, 0, 1, 1], dtype='float'), np.array([0, 0, 0, 1, 1, 1], dtype='float'), np.array([0, 0, 1, 1], dtype='float')])
-    pts = [pts1, pts2]
-    splines = [sp1, sp2]
-    
-    couples = CouplesBSplineBorder.from_splines(pts, splines)
-    shape_by_patch = np.array([p.shape[1:] for p in pts], dtype='int')
-    connectivity = couples.get_connectivity(shape_by_patch)
-    
-    # connectivity = MultiPatchBSplineConnectivity.from_separated_ctrlPts(pts)
-    
-    ddl = connectivity.pack(connectivity.agglomerate(pts))
-    
-    plot_multipatch(ddl, connectivity)
-
-# %%
-
-
-# TODO : extract border, displace border, DN multipatch, knot insertion, order elevation
-class MultiPatchBSpline:
-    
-    def __init__(self, splines, couples=None, connectivity=None):
-        self.splines = splines
-        self.npatch = len(self.splines)
-        assert np.all([s.NPa==self.splines[0].NPa for s in self.splines[1:]]), "The parametric space should be of the same dimension on every patch"
-        self.NPa = self.splines[0].NPa
-        # assert np.all([s.NPh==self.splines[0].NPh for s in self.splines[1:]]), "The physical space should be of the same dimension on every patch"
-        # self.NPh = self.splines[0].NPh
-        # if couples is None:
-        #     self.couples = CouplesBSplineBorder.from_splines(splines)
-        # else:
-        #     self.couples = couples
-        if connectivity is None:
-            self.connectivity = self.couples.get_connectivity(self.splines)
-        else:
-            self.connectivity = connectivity
-    
-    def get_border(self):
-        if self.NPa<=1:
-            raise AssertionError("The parametric space must be at least 2D to extract borders !")
-        duplicate_coo_mask = self.get_duplicate_coo_mask()
-        border_splines = []
-        border_coo_inds = []
-        ind = 0
-        for i in range(self.npatch):
-            s = self.splines[i]
-            degrees = s.getDegrees()
-            knots = np.array(s.getKnots(), dtype='object')
-            coo = s.ctrlPts
-            next_ind = ind + self.coo_sizes[i]
-            coo_inds_s = self.coo_inds[ind:next_ind].reshape(coo.shape)
-            duplicate_coo_mask_s = duplicate_coo_mask[ind:next_ind].reshape(coo.shape)
-            ind = next_ind
-            for axis in range(self.NPa):
-                d = np.delete(degrees, axis)
-                k = np.delete(knots, axis, axis=0)
-                for side in range(2):
-                    if not np.take(duplicate_coo_mask_s, -side, axis=(axis+1)).all():
-                        border_splines.append(BSpline(np.take(coo, -side, axis=(axis+1)), d, k))
-                        border_coo_inds.append(np.take(coo_inds_s, -side, axis=(axis+1)).flat)
-        border_splines = np.array(border_splines, dtype='object')
-        border_coo_inds = np.concatenate(border_coo_inds)
-        border = self.__class__(border_splines, border_coo_inds, self.ndof)
-        return border
-    
-    def move_border(self):
-        # TODO with IDW
-        raise NotImplementedError()
-    
-    def save_paraview(self, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True):
-        if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa
-        
-        if verbose:
-            iterator = trange(self.npatch, desc=("Saving " + name))
-        else:
-            iterator = range(self.npatch)
-        
-        if separated_fields is None:
-            separated_fields = [{} for _ in range(self.npatch)]
-        
-        for key, value in unique_fields.items():
-            if callable(value):
-                raise NotImplementedError("To handle functions as fields, use separated_fields !")
-            else:
-                separated_value = self.connectivity.separate(self.connectivity.unpack(value))
-                for patch in range(self.npatch):
-                    separated_fields[patch][key] = separated_value[patch]
-        
-        groups = {}
-        for patch in iterator:
-            groups = self.splines[patch].saveParaview(separated_ctrl_pts[patch], 
-                                                      path, 
-                                                      name, 
-                                                      n_step=n_step, 
-                                                      n_eval_per_elem=n_eval_per_elem, 
-                                                      fields=separated_fields[patch], 
-                                                      groups=groups, 
-                                                      make_pvd=((patch + 1)==self.npatch), 
-                                                      verbose=False)
-    
-    def save_stl(self):
-        raise NotImplementedError()
-
-if __name__=="__main__":
-    from bsplyne_lib import BSpline, new_cube
-
-    cube = new_cube([0.5, 0.5, 0.5], [0, 0, 1], 1)
-    cube_degrees = cube.getDegrees()
-    cube_knots = cube.getKnots()
-    orientation = np.ones(3, dtype='float')/np.sqrt(3)
-    length = 10
-    splines = [cube]
-    for axis in range(3):
-        to_extrude = np.take(cube.ctrlPts, -1, axis=(axis + 1))
-        ctrlPts = np.concatenate((to_extrude[:, None], 
-                                (to_extrude + length*orientation[:, None, None])[:, None]), axis=1)
-        degrees = np.array([1] + [cube_degrees[i] for i in range(3) if i!=axis], dtype='int')
-        knots = [np.array([0, 0, 1, 1], dtype='float')] + [cube_knots[i] for i in range(3) if i!=axis]
-        splines.append(BSpline(ctrlPts, degrees, knots))
-    splines = np.array(splines, dtype='object')
-    connectivity = MultiPatchBSplineConnectivity.from_splines(splines)
-    couples = None
-    volume = MultiPatchBSpline(splines, couples, connectivity)
-    dof = volume.connectivity.get_dof(volume.splines)
-    U_pts = volume.connectivity.dof_to_pts(dof + 1*np.random.rand(dof.size))
-    fields = {"U": U_pts[None]}
-    volume.save_paraview("./out_tests", "MultiPatch", fields=fields)
-
-
-# %%
-
-if __name__=="__main__":
-    from bsplyne_lib import new_cube
-    from bsplyne_lib.geometries_in_3D import _rotation_matrix
-    
-    length = 2.
-    C1 = new_cube([length/4, length/4, length/4], [0, 0, 1], length/2)
-    C2 = new_cube([length/4, length/4, 3*length/4], [0, 0, 1], length/2)
-    center2 = np.array([length/4, length/4, 3*length/4])[:, None, None, None]
-    C2.ctrlPts = np.tensordot(_rotation_matrix([0, 0, 1], np.pi*0/2), C2.ctrlPts - center2, 1) + center2
-    splines = np.array([C1, C2], dtype='object')
-    to_insert = [np.array([0.25, 0.5, 0.75], dtype='float'), 
-                 np.array([0.25, 0.5, 0.75], dtype='float'), 
-                 np.array([0.25, 0.5, 0.75], dtype='float')]
-    to_elevate = [1, 1, 1]
-    for sp in splines:
-        sp.orderElevation(to_elevate)
-        sp.knotInsertion(to_insert)
-    volume = MultiPatchBSpline(splines)
-    print(volume.splines[0].ctrlPts.shape)
-    print(volume.couples.spline1_inds, 
-          volume.couples.spline2_inds, 
-          volume.couples.axes1, 
-          volume.couples.axes2, 
-          volume.couples.front_sides1, 
-          volume.couples.front_sides2, 
-          volume.couples.transpose_2_to_1, 
-          volume.couples.flip_2_to_1)
-    print(volume.connectivity.coo_inds)
-    dof = volume.connectivity.get_dof(volume.splines)
-    U_pts = volume.connectivity.dof_to_pts(dof + 1 + 0.1*np.random.rand(dof.size))
-    fields = {"U": U_pts[None]}
-    volume.save_paraview("./out_tests", "MultiPatch", fields=fields)
-    
-
-# %%
-
-if __name__=="__main__":
-    import numpy as np
-    from stl import mesh
-    from bsplyne_lib import new_quarter_strut
-
-    spline = new_quarter_strut([0, 0, 0], [0, 0, 1], 1, 10)
-
-    tri = []
-    XI = spline.linspace(n_eval_per_elem=[10, 1, 100])
-    shape = [xi.size for xi in XI]
-    for axis in range(3):
-        XI_axis = [xi for xi in XI]
-        shape_axis = [shape[i] for i in range(len(shape)) if i!=axis]
-        XI_axis[axis] = np.zeros(1)
-        pts_l = spline(tuple(XI_axis), [0, 0, 0]).reshape([3] + shape_axis)
-        XI_axis[axis] = np.ones(1)
-        pts_r = spline(tuple(XI_axis), [0, 0, 0]).reshape([3] + shape_axis)
-        for pts in [pts_l, pts_r]:
-            A = pts[:,  :-1,  :-1].reshape((3, -1)).T[:, None, :]
-            B = pts[:,  :-1, 1:  ].reshape((3, -1)).T[:, None, :]
-            C = pts[:, 1:  ,  :-1].reshape((3, -1)).T[:, None, :]
-            D = pts[:, 1:  , 1:  ].reshape((3, -1)).T[:, None, :]
-            tri1 = np.concatenate((A, B, C), axis=1)
-            tri2 = np.concatenate((D, C, B), axis=1)
-            tri.append(np.concatenate((tri1, tri2), axis=0))
-    tri = np.concatenate(tri, axis=0)
-    data = np.empty(tri.shape[0], dtype=mesh.Mesh.dtype)
-    data['vectors'] = tri
-    m = mesh.Mesh(data, remove_empty_areas=True)
-
-    m.save('new_stl_file.stl')
-
-# %%
-
-class MultiPatchBSpline:
-    
-    def __init__(self, splines, connectivity):
-        self.splines = splines
-        self.npatch = len(self.splines)
-        assert np.all([s.NPa==self.splines[0].NPa for s in self.splines[1:]]), "The parametric space should be of the same dimension on every patch"
-        self.NPa = self.splines[0].NPa
-        assert np.all([s.NPh==self.splines[0].NPh for s in self.splines[1:]]), "The physical space should be of the same dimension on every patch"
-        self.NPh = self.splines[0].NPh
-        self.connectivity = connectivity
-    
-    def get_border(self):
-        if self.NPa<=1:
-            raise AssertionError("The parametric space must be at least 2D to extract borders !")
-        duplicate_coo_mask = self.get_duplicate_coo_mask()
-        border_splines = []
-        border_coo_inds = []
-        ind = 0
-        for i in range(self.npatch):
-            s = self.splines[i]
-            degrees = s.getDegrees()
-            knots = np.array(s.getKnots(), dtype='object')
-            coo = s.ctrlPts
-            next_ind = ind + self.coo_sizes[i]
-            coo_inds_s = self.coo_inds[ind:next_ind].reshape(coo.shape)
-            duplicate_coo_mask_s = duplicate_coo_mask[ind:next_ind].reshape(coo.shape)
-            ind = next_ind
-            for axis in range(self.NPa):
-                d = np.delete(degrees, axis)
-                k = np.delete(knots, axis, axis=0)
-                for side in range(2):
-                    if not np.take(duplicate_coo_mask_s, -side, axis=(axis+1)).all():
-                        border_splines.append(BSpline(np.take(coo, -side, axis=(axis+1)), d, k))
-                        border_coo_inds.append(np.take(coo_inds_s, -side, axis=(axis+1)).flat)
-        border_splines = np.array(border_splines, dtype='object')
-        border_coo_inds = np.concatenate(border_coo_inds)
-        border = self.__class__(border_splines, border_coo_inds, self.ndof)
-        return border
-    
-    def move_border(self):
-        # TODO with IDW
-        raise NotImplementedError()
-    
-    def save_paraview(self, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True):
-        if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa
-        
-        if verbose:
-            iterator = trange(self.npatch, desc=("Saving " + name))
-        else:
-            iterator = range(self.npatch)
-        
-        if separated_fields is None:
-            separated_fields = [{} for _ in range(self.npatch)]
-        
-        for key, value in unique_fields.items():
-            if callable(value):
-                raise NotImplementedError("To handle functions as fields, use separated_fields !")
-            else:
-                separated_value = self.connectivity.separate(self.connectivity.unpack(value))
-                for patch in range(self.npatch):
-                    separated_fields[patch][key] = separated_value[patch]
-        
-        groups = {}
-        for patch in iterator:
-            groups = self.splines[patch].saveParaview(separated_ctrl_pts[patch], 
-                                                      path, 
-                                                      name, 
-                                                      n_step=n_step, 
-                                                      n_eval_per_elem=n_eval_per_elem, 
-                                                      fields=separated_fields[patch], 
-                                                      groups=groups, 
-                                                      make_pvd=((patch + 1)==self.npatch), 
-                                                      verbose=False)
-    
-    def save_stl(self):
-        raise NotImplementedError()

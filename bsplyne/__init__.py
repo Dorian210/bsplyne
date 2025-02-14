@@ -3,7 +3,7 @@
 """
 from .b_spline_basis import BSplineBasis
 from .b_spline import BSpline
-from .multi_patch_b_spline import MultiPatchBSplineConnectivity, CouplesBSplineBorder, MultiPatchBSpline
+from .multi_patch_b_spline import MultiPatchBSplineConnectivity, CouplesBSplineBorder
 from .geometries_in_3D import (_scale_rotate_translate, 
                                new_quarter_circle, 
                                new_circle, 

@@ -437,7 +437,7 @@ class BSpline:
             values = (DN @ ctrlPts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
         return values
     
-    def knotInsertion(self, ctrlPts, knots_to_add: Iterable[Union[npt.NDArray[np.float_], int]]):
+    def knotInsertion(self, ctrlPts, knots_to_add: Iterable[Union[npt.NDArray[np.float64], int]]):
         """
         Add the knots passed in parameter to the knot vector and modify the 
         attributes so that the evaluation of the spline stays the same.
@@ -447,7 +447,7 @@ class BSpline:
         ctrlPts : numpy.array of float
             Contains the control points of the B-spline as [X, Y, Z, ...].
             Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
-        knots_to_add : Iterable[Union[npt.NDArray[np.float_], int]]
+        knots_to_add : Iterable[Union[npt.NDArray[np.float64], int]]
             Refinement on each axis :
             If `NDArray`, contains the knots to add on said axis. It must not 
             contain knots outside of the old knot vector's interval.
@@ -883,7 +883,7 @@ class BSpline:
             mesh = io.Mesh(points, cells, point_data_step) # type: ignore
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
-    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields=None, groups=None, make_pvd=True, verbose=True):
+    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields=None, groups=None, make_pvd=True, verbose=True, fiels_on_interior_only=True):
         """
         Saves a plot as a set of .vtu files with a .pvd file.
 
@@ -931,6 +931,8 @@ class BSpline:
             If True, create a PVD file for all the data in `groups`.
         verbose : bool, default True
             If True, print the advancement state to the standard output.
+        fiels_on_interior_only: bool, default True
+            Whether to save the fields on the control mesh and elements boder too.
 
         Returns
         -------
@@ -983,18 +985,31 @@ class BSpline:
         else:
             groups[control_points] = {"ext": "vtu", "npart": 1, "nstep": n_step}
         
+        if fiels_on_interior_only:
+            not_interior_fields = {}
+            XI = np.zeros((self.NPa, 1))
+            for key, value in fields.items():
+                if callable(value):
+                    nb_steps, nxi, paraview_size = value(self, XI).shape
+                    not_interior_fields[key] = np.full((nb_steps, paraview_size, *ctrlPts.shape[1:]), np.NaN)
+                else:
+                    not_interior_fields[key] = np.full_like(value, np.NaN)
+        else:
+            not_interior_fields = fields
+                
+        
         interior_prefix = os.path.join(path, name+"_"+interior+"_"+str(groups[interior]["npart"] - 1))
         self._saveElementsInteriorParaview(ctrlPts, n_eval_per_elem, interior_prefix, n_step, fields)
         if verbose:
             print(interior, "done")
 
         elements_borders_prefix = os.path.join(path, name+"_"+elements_borders+"_"+str(groups[elements_borders]["npart"] - 1))
-        self._saveElemSeparatorParaview(ctrlPts, n_eval_per_elem, elements_borders_prefix, n_step, fields)
+        self._saveElemSeparatorParaview(ctrlPts, n_eval_per_elem, elements_borders_prefix, n_step, not_interior_fields)
         if verbose:
             print(elements_borders, "done")
 
         control_points_prefix = os.path.join(path, name+"_"+control_points+"_"+str(groups[control_points]["npart"] - 1))
-        self._saveControlPolyParaview(ctrlPts, control_points_prefix, n_step, fields)
+        self._saveControlPolyParaview(ctrlPts, control_points_prefix, n_step, not_interior_fields)
         if verbose:
             print(control_points, "done")
         
@@ -1040,16 +1055,18 @@ class BSpline:
     def plotPV(self, ctrl_pts):
         pass
     
-    def plotMPL(self, ctrl_pts, n_eval_per_elem=10, ax=None, ctrl_color='g', interior_color='b', elem_color='r'):
+    def plotMPL(self, ctrl_pts, n_eval_per_elem=10, ax=None, ctrl_color='#1b9e77', interior_color='#7570b3', elem_color='#666666', border_color='#d95f02'):
         import matplotlib.pyplot as plt
         from matplotlib.collections import LineCollection
         from matplotlib.patches import Polygon
+        from mpl_toolkits.mplot3d.art3d import Line3DCollection
+        from matplotlib import lines
         NPh = ctrl_pts.shape[0]
         fig = plt.figure() if ax is None else ax.get_figure()
         if NPh==2:
             ax = fig.add_subplot() if ax is None else ax
             if self.NPa==1:
-                ax.plot(ctrl_pts[0], ctrl_pts[1], "-o" + ctrl_color, label="Control mesh", zorder=0)
+                ax.plot(ctrl_pts[0], ctrl_pts[1], marker="o", c=ctrl_color, label="Control mesh", zorder=0)
                 xi, = self.linspace(n_eval_per_elem=n_eval_per_elem)
                 x, y = self.__call__(ctrl_pts, [xi])
                 ax.plot(x, y, c=interior_color, label="B-spline", zorder=1)
@@ -1064,16 +1081,17 @@ class BSpline:
                 x_pol = np.hstack((x_xi[ 0, :: 1], x_eta[:: 1, -1], x_xi[-1, ::-1], x_eta[::-1,  0]))
                 y_pol = np.hstack((y_xi[ 0, :: 1], y_eta[:: 1, -1], y_xi[-1, ::-1], y_eta[::-1,  0]))
                 xy_pol = np.hstack((x_pol[:, None], y_pol[:, None]))
-                ax.add_patch(Polygon(xy_pol, fill=True, edgecolor=None, facecolor=interior_color, alpha=0.25, label="B-spline", zorder=0)) # type: ignore
-                ax.plot(ctrl_pts[0, 0, 0], ctrl_pts[1, 0, 0], "-o" + ctrl_color, label="Control mesh", zorder=1, ms=plt.rcParams['lines.markersize']/2)
+                ax.add_patch(Polygon(xy_pol, fill=True, edgecolor=None, facecolor=interior_color, alpha=0.5, label="B-spline patch", zorder=0)) # type: ignore
+                ax.plot(ctrl_pts[0, 0, 0], ctrl_pts[1, 0, 0], marker="o", c=ctrl_color, label="Control mesh", zorder=1, ms=plt.rcParams['lines.markersize']/np.sqrt(2))
                 ax.add_collection(LineCollection(ctrl_pts.transpose(1, 2, 0), colors=ctrl_color, zorder=1)) # type: ignore
                 ax.add_collection(LineCollection(ctrl_pts.transpose(2, 1, 0), colors=ctrl_color, zorder=1)) # type: ignore
-                ax.plot(ctrl_pts[0].ravel(), ctrl_pts[1].ravel(), ctrl_color + "o", zorder=1, ms=plt.rcParams['lines.markersize']/2) # type: ignore
-                ax.plot(x_xi[0, 0], y_xi[0, 0], "-" + elem_color, label="Elements borders", zorder=2)
-                ax.add_collection(LineCollection(np.array([x_xi, y_xi]).transpose(1, 2, 0), colors='r', zorder=2)) # type: ignore
-                ax.add_collection(LineCollection(np.array([x_eta, y_eta]).transpose(2, 1, 0), colors='r', zorder=2)) # type: ignore
+                ax.scatter(ctrl_pts[0].ravel(), ctrl_pts[1].ravel(), marker="o", c=ctrl_color, zorder=1, s=0.5*plt.rcParams['lines.markersize']**2) # type: ignore
+                ax.plot(x_xi[0, 0], y_xi[0, 0], linestyle="-", c=elem_color, label="Elements borders", zorder=2)
+                ax.add_collection(LineCollection(np.array([x_xi, y_xi]).transpose(1, 2, 0)[1:-1], colors=elem_color, zorder=2)) # type: ignore
+                ax.add_collection(LineCollection(np.array([x_eta, y_eta]).transpose(2, 1, 0)[1:-1], colors=elem_color, zorder=2)) # type: ignore
+                ax.add_patch(Polygon(xy_pol, lw=1.25*plt.rcParams['lines.linewidth'], fill=False, edgecolor=border_color, label="Patch borders", zorder=2)) # type: ignore
             else:
-                raise ValueError(f"Can't plot a {self.NPa} shape in a 2D space.")
+                raise ValueError(f"Can't plot a {self.NPa}D shape in a 2D space.")
             ax.legend()
             ax.set_aspect(1)
         elif NPh==3:
@@ -1081,27 +1099,63 @@ class BSpline:
             if self.NPa==1:
                 pass
             elif self.NPa==2:
-                fig = plt.figure()
-                
-
-                # Make data
-                u = np.linspace(0, 2 * np.pi, 100)
-                v = np.linspace(0, np.pi, 100)
-                x = 10 * np.outer(np.cos(u), np.sin(v))
-                y = 10 * np.outer(np.sin(u), np.sin(v))
-                z = 10 * np.outer(np.ones(np.size(u)), np.cos(v))
-
-                # Plot the surface
-                ax.plot_surface(x, y, z)
-
-                # Set an equal aspect ratio
-                ax.set_aspect('equal')
-
-                plt.show()
+                xi, eta = self.linspace(n_eval_per_elem=n_eval_per_elem)
+                xi_elem, eta_elem = self.linspace(n_eval_per_elem=1)
+                x, y, z = self.__call__(ctrl_pts, [xi, eta])
+                x_xi, y_xi, z_xi = self.__call__(ctrl_pts, [xi_elem, eta])
+                x_eta, y_eta, z_eta = self.__call__(ctrl_pts, [xi, eta_elem])
+                ax.plot_surface(x, y, z, rcount=1, ccount=1, edgecolor=None, facecolor=interior_color, alpha=0.5)
+                ax.plot_wireframe(ctrl_pts[0], ctrl_pts[1], ctrl_pts[2], color=ctrl_color, zorder=2)
+                ax.scatter(ctrl_pts[0], ctrl_pts[1], ctrl_pts[2], color=ctrl_color, zorder=2)
+                ax.add_collection(Line3DCollection(np.array([x_xi, y_xi, z_xi]).transpose(1, 2, 0), colors=elem_color, zorder=1)) # type: ignore
+                ax.add_collection(Line3DCollection(np.array([x_eta, y_eta, z_eta]).transpose(2, 1, 0), colors=elem_color, zorder=1)) # type: ignore
+                ax.plot_surface(x, y, z, rcount=1, ccount=1, edgecolor=border_color, facecolor=None, alpha=0)
+                ctrl_handle = lines.Line2D([], [], color=ctrl_color, marker='o', linestyle='-', label='Control mesh')
+                elem_handle = lines.Line2D([], [], color=elem_color, linestyle='-', label='Elements borders')
+                border_handle = lines.Line2D([], [], color=border_color, linestyle='-', label='Patch borders')
+                ax.legend(handles=[ctrl_handle, elem_handle, border_handle])
+                mid_param = [np.array([sum(self.bases[0].span)/2]), np.array([sum(self.bases[1].span)/2])]
+                dxi, deta = self.__call__(ctrl_pts, mid_param, k=1)
+                nx, ny, nz = np.cross(dxi.ravel(), deta.ravel())
+                azim = np.degrees(np.arctan2(ny, nx))
+                elev = np.degrees(np.arcsin(nz / np.sqrt(nx**2 + ny**2 + nz**2)))
+                ax.view_init(elev=elev + 30, azim=azim)
             elif self.NPa==3:
-                pass
+                XI = self.linspace(n_eval_per_elem=n_eval_per_elem)
+                XI_elem = self.linspace(n_eval_per_elem=1)
+                for face in range(3):
+                    for side in [-1, 0]:
+                        XI_face = []
+                        XI_1_face = []
+                        XI_2_face = []
+                        first = True
+                        for i in range(3):
+                            if i==face:
+                                XI_face.append(np.array([XI[i][side]]))
+                                XI_1_face.append(np.array([XI[i][side]]))
+                                XI_2_face.append(np.array([XI[i][side]]))
+                            else:
+                                XI_face.append(XI[i])
+                                XI_1_face.append(XI[i] if first else XI_elem[i])
+                                XI_2_face.append(XI_elem[i] if first else XI[i])
+                                first = False
+                        X = np.squeeze(np.array(self.__call__(ctrl_pts, XI_face)))
+                        X_1 = np.squeeze(np.array(self.__call__(ctrl_pts, XI_1_face)))
+                        X_2 = np.squeeze(np.array(self.__call__(ctrl_pts, XI_2_face)))
+                        ax.plot_surface(*X, rcount=1, ccount=1, edgecolor=None, color=interior_color, alpha=0.5)
+                        ax.add_collection(Line3DCollection(X_1.transpose(2, 1, 0), colors=elem_color, zorder=1)) # type: ignore
+                        ax.add_collection(Line3DCollection(X_2.transpose(1, 2, 0), colors=elem_color, zorder=1)) # type: ignore
+                        ax.plot_surface(*X, rcount=1, ccount=1, edgecolor=border_color, facecolor=None, alpha=0)
+                for axis in range(3):
+                    ctrl_mesh_axis = np.rollaxis(ctrl_pts, axis + 1, 1).reshape((3, ctrl_pts.shape[axis + 1], -1))
+                    ax.add_collection(Line3DCollection(ctrl_mesh_axis.transpose(2, 1, 0), colors=ctrl_color, zorder=2)) # type: ignore
+                ax.scatter(*ctrl_pts.reshape((3, -1)), color=ctrl_color, zorder=2)
+                ctrl_handle = lines.Line2D([], [], color=ctrl_color, marker='o', linestyle='-', label='Control mesh')
+                elem_handle = lines.Line2D([], [], color=elem_color, linestyle='-', label='Elements borders')
+                border_handle = lines.Line2D([], [], color=border_color, linestyle='-', label='Patch borders')
+                ax.legend(handles=[ctrl_handle, elem_handle, border_handle])
             else:
-                raise ValueError(f"Can't plot a {self.NPa} shape in a 3D space.")
+                raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
         else:
             raise ValueError(f"Can't plot in a {NPh}D space.")
 
