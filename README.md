@@ -51,7 +51,7 @@ Several example scripts demonstrating the usage of **bsplyne** can be found in t
 
 ## Documentation
 
-The full API documentation is available in the `docs/` directory of the project or via the [online documentation portal](https://dorian210.github.io/bsplyne/bsplyne.html).
+The full API documentation is available in the `docs/` directory of the project or via the [online documentation portal](https://dorian210.github.io/bsplyne/).
 
 ## Contributions
 
