@@ -12,13 +12,13 @@ from .b_spline_basis import BSplineBasis
 # from .save_YETI import Domain, write
 
 # union-find algorithm for connectivity
-@nb.njit
+@nb.njit(cache=True)
 def find(parent, x):
     if parent[x] != x:
         parent[x] = find(parent, parent[x])
     return parent[x]
 
-@nb.njit
+@nb.njit(cache=True)
 def union(parent, rank, x, y):
     rootX = find(parent, x)
     rootY = find(parent, y)
@@ -31,7 +31,7 @@ def union(parent, rank, x, y):
             parent[rootY] = rootX
             rank[rootX] += 1
 
-@nb.njit
+@nb.njit(cache=True)
 def get_unique_nodes_inds(nodes_couples, nb_nodes):
     parent = np.arange(nb_nodes)
     rank = np.zeros(nb_nodes, dtype=np.int32)
