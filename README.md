@@ -20,7 +20,6 @@ Make sure you have the following dependencies installed:
 - `numba`
 - `scipy`
 - `matplotlib`
-- `wide_product`
 - `meshio`
 - `tqdm`
 - `pathos`
