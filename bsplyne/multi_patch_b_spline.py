@@ -580,15 +580,15 @@ class MultiPatchBSplineConnectivity:
                         "elements_borders": {"ext": "vtu", "npart": patch, "nstep": n_step}, 
                         "control_points": {"ext": "vtu", "npart": patch, "nstep": n_step}}
                 splines[i].saveParaview(separated_ctrl_pts[i], 
-                                            path, 
-                                            name, 
-                                            n_step=n_step, 
-                                            n_eval_per_elem=n_eval_per_elem, 
-                                            fields=separated_fields[i], 
-                                            groups=groups, 
-                                            make_pvd=False, 
-                                            verbose=False, 
-                                            fiels_on_interior_only=fiels_on_interior_only)
+                                        path, 
+                                        name, 
+                                        n_step=n_step, 
+                                        n_eval_per_elem=n_eval_per_elem, 
+                                        fields=separated_fields[i], 
+                                        groups=groups, 
+                                        make_pvd=False, 
+                                        verbose=False, 
+                                        fiels_on_interior_only=fiels_on_interior_only)
                 block_pbar.update(1)
     
     def save_paraview(self, splines, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True, fields_on_interior_only=True):

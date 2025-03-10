@@ -6,10 +6,11 @@ import xml.dom.minidom
 import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sps
-from wide_product import wide_product
 import meshio as io
 
 from bsplyne.b_spline_basis import BSplineBasis
+from bsplyne.my_wide_product import my_wide_product
+# from wide_product import wide_product as my_wide_product
 
 class BSpline:
     """
@@ -319,7 +320,7 @@ class BSpline:
         """
         
         if isinstance(XI, np.ndarray):
-            fct = wide_product
+            fct = my_wide_product
             XI = XI.reshape((self.NPa, -1))
             s1 = XI.shape[1]
         else:
@@ -345,20 +346,24 @@ class BSpline:
                 k_arr[u] = c
                 key = tuple(k_arr)
                 if key not in dic:
-                    dic[key] = np.ones((s1, 1))
                     for idx in range(self.NPa):
                         k_querry = k_arr[idx]
-                        dic[key] = fct(dic[key], dkbasis_dxik[idx, k_querry])
+                        if idx==0:
+                            dic[key] = dkbasis_dxik[idx, k_querry]
+                        else:
+                            dic[key] = fct(dic[key], dkbasis_dxik[idx, k_querry])
                 DN[axes] = dic[key]
             return DN
         else:
-            DN = np.ones((s1, 1))
             for idx in range(self.NPa):
                 basis = self.bases[idx]
                 k_idx = k[idx]
                 xi = XI[idx] - np.finfo('float').eps * (XI[idx]==basis.knot[-1])
                 DN_elem = basis.N(xi, k=k_idx)
-                DN = fct(DN, DN_elem)
+                if idx==0:
+                    DN = DN_elem
+                else:
+                    DN = fct(DN, DN_elem)
             return DN
     
     def __call__(self, ctrlPts, XI, k=0):
