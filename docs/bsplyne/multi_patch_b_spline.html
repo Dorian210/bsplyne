@@ -219,13 +219,13 @@
 </span><span id="L-12"><a href="#L-12"><span class="linenos"> 12</span></a><span class="c1"># from .save_YETI import Domain, write</span>
 </span><span id="L-13"><a href="#L-13"><span class="linenos"> 13</span></a>
 </span><span id="L-14"><a href="#L-14"><span class="linenos"> 14</span></a><span class="c1"># union-find algorithm for connectivity</span>
-</span><span id="L-15"><a href="#L-15"><span class="linenos"> 15</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span>
+</span><span id="L-15"><a href="#L-15"><span class="linenos"> 15</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="L-16"><a href="#L-16"><span class="linenos"> 16</span></a><span class="k">def</span><span class="w"> </span><span class="nf">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 </span><span id="L-17"><a href="#L-17"><span class="linenos"> 17</span></a>    <span class="k">if</span> <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">!=</span> <span class="n">x</span><span class="p">:</span>
 </span><span id="L-18"><a href="#L-18"><span class="linenos"> 18</span></a>        <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">])</span>
 </span><span id="L-19"><a href="#L-19"><span class="linenos"> 19</span></a>    <span class="k">return</span> <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span>
 </span><span id="L-20"><a href="#L-20"><span class="linenos"> 20</span></a>
-</span><span id="L-21"><a href="#L-21"><span class="linenos"> 21</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span>
+</span><span id="L-21"><a href="#L-21"><span class="linenos"> 21</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="L-22"><a href="#L-22"><span class="linenos"> 22</span></a><span class="k">def</span><span class="w"> </span><span class="nf">union</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
 </span><span id="L-23"><a href="#L-23"><span class="linenos"> 23</span></a>    <span class="n">rootX</span> <span class="o">=</span> <span class="n">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 </span><span id="L-24"><a href="#L-24"><span class="linenos"> 24</span></a>    <span class="n">rootY</span> <span class="o">=</span> <span class="n">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
@@ -238,7 +238,7 @@
 </span><span id="L-31"><a href="#L-31"><span class="linenos"> 31</span></a>            <span class="n">parent</span><span class="p">[</span><span class="n">rootY</span><span class="p">]</span> <span class="o">=</span> <span class="n">rootX</span>
 </span><span id="L-32"><a href="#L-32"><span class="linenos"> 32</span></a>            <span class="n">rank</span><span class="p">[</span><span class="n">rootX</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
 </span><span id="L-33"><a href="#L-33"><span class="linenos"> 33</span></a>
-</span><span id="L-34"><a href="#L-34"><span class="linenos"> 34</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span>
+</span><span id="L-34"><a href="#L-34"><span class="linenos"> 34</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="L-35"><a href="#L-35"><span class="linenos"> 35</span></a><span class="k">def</span><span class="w"> </span><span class="nf">get_unique_nodes_inds</span><span class="p">(</span><span class="n">nodes_couples</span><span class="p">,</span> <span class="n">nb_nodes</span><span class="p">):</span>
 </span><span id="L-36"><a href="#L-36"><span class="linenos"> 36</span></a>    <span class="n">parent</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">nb_nodes</span><span class="p">)</span>
 </span><span id="L-37"><a href="#L-37"><span class="linenos"> 37</span></a>    <span class="n">rank</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">nb_nodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
@@ -1196,7 +1196,7 @@
                 <section id="find">
                             <input id="find-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
-                    <div class="decorator decorator-nb.njit">@nb.njit</div>
+                    <div class="decorator decorator-nb.njit">@nb.njit(cache=True)</div>
 
         <span class="def">def</span>
         <span class="name">find</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">parent</span>, </span><span class="param"><span class="n">x</span></span><span class="return-annotation">):</span></span>
@@ -1205,7 +1205,7 @@
 
     </div>
     <a class="headerlink" href="#find"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="find-16"><a href="#find-16"><span class="linenos">16</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="find-16"><a href="#find-16"><span class="linenos">16</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="find-17"><a href="#find-17"><span class="linenos">17</span></a><span class="k">def</span><span class="w"> </span><span class="nf">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
 </span><span id="find-18"><a href="#find-18"><span class="linenos">18</span></a>    <span class="k">if</span> <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">!=</span> <span class="n">x</span><span class="p">:</span>
 </span><span id="find-19"><a href="#find-19"><span class="linenos">19</span></a>        <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">]</span> <span class="o">=</span> <span class="n">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">parent</span><span class="p">[</span><span class="n">x</span><span class="p">])</span>
@@ -1219,7 +1219,7 @@
                 <section id="union">
                             <input id="union-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
-                    <div class="decorator decorator-nb.njit">@nb.njit</div>
+                    <div class="decorator decorator-nb.njit">@nb.njit(cache=True)</div>
 
         <span class="def">def</span>
         <span class="name">union</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">parent</span>, </span><span class="param"><span class="n">rank</span>, </span><span class="param"><span class="n">x</span>, </span><span class="param"><span class="n">y</span></span><span class="return-annotation">):</span></span>
@@ -1228,7 +1228,7 @@
 
     </div>
     <a class="headerlink" href="#union"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="union-22"><a href="#union-22"><span class="linenos">22</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="union-22"><a href="#union-22"><span class="linenos">22</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="union-23"><a href="#union-23"><span class="linenos">23</span></a><span class="k">def</span><span class="w"> </span><span class="nf">union</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">rank</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">):</span>
 </span><span id="union-24"><a href="#union-24"><span class="linenos">24</span></a>    <span class="n">rootX</span> <span class="o">=</span> <span class="n">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 </span><span id="union-25"><a href="#union-25"><span class="linenos">25</span></a>    <span class="n">rootY</span> <span class="o">=</span> <span class="n">find</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
@@ -1249,7 +1249,7 @@
                 <section id="get_unique_nodes_inds">
                             <input id="get_unique_nodes_inds-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
-                    <div class="decorator decorator-nb.njit">@nb.njit</div>
+                    <div class="decorator decorator-nb.njit">@nb.njit(cache=True)</div>
 
         <span class="def">def</span>
         <span class="name">get_unique_nodes_inds</span><span class="signature pdoc-code condensed">(<span class="param"><span class="n">nodes_couples</span>, </span><span class="param"><span class="n">nb_nodes</span></span><span class="return-annotation">):</span></span>
@@ -1258,7 +1258,7 @@
 
     </div>
     <a class="headerlink" href="#get_unique_nodes_inds"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="get_unique_nodes_inds-35"><a href="#get_unique_nodes_inds-35"><span class="linenos">35</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="get_unique_nodes_inds-35"><a href="#get_unique_nodes_inds-35"><span class="linenos">35</span></a><span class="nd">@nb</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </span><span id="get_unique_nodes_inds-36"><a href="#get_unique_nodes_inds-36"><span class="linenos">36</span></a><span class="k">def</span><span class="w"> </span><span class="nf">get_unique_nodes_inds</span><span class="p">(</span><span class="n">nodes_couples</span><span class="p">,</span> <span class="n">nb_nodes</span><span class="p">):</span>
 </span><span id="get_unique_nodes_inds-37"><a href="#get_unique_nodes_inds-37"><span class="linenos">37</span></a>    <span class="n">parent</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">nb_nodes</span><span class="p">)</span>
 </span><span id="get_unique_nodes_inds-38"><a href="#get_unique_nodes_inds-38"><span class="linenos">38</span></a>    <span class="n">rank</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">nb_nodes</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
