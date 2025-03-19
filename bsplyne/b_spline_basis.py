@@ -68,7 +68,7 @@ class BSplineBasis:
         numpy.array of float
             Set of xi values over the span.
         """
-        knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=0, self.knot<=1)])
+        knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=self.span[0], self.knot<=self.span[1])])
         res = np.linspace(knot_uniq[-2], knot_uniq[-1], n_eval_per_elem + 1)
         for i in range(knot_uniq.size - 2, 0, -1):
             res = np.append(np.linspace(knot_uniq[i-1], knot_uniq[i], n_eval_per_elem, endpoint=False), 
