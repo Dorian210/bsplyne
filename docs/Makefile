@@ -3,7 +3,9 @@ PACKAGE = ../bsplyne
 # Dossier de sortie pour la documentation
 DOC_DIR = .
 # Path to logo file
-LOGO = https://dorian210.github.io/bsplyne/logo.png
+LOGO = logo.png
+# URL of the logo on GitHub
+LOGO_URL = https://dorian210.github.io/bsplyne/logo.png
 
 .PHONY: all clean doc
 
@@ -12,7 +14,7 @@ all: doc
 
 # Génération de la documentation avec pdoc
 doc:
-	pdoc -o $(DOC_DIR) -d numpy --logo $(LOGO) $(PACKAGE)
+	pdoc -o $(DOC_DIR) -d numpy --logo $(LOGO_URL) --favicon $(LOGO_URL) $(PACKAGE)
 
 # Nettoyage des fichiers générés (sans supprimer le Makefile ni le logo)
 clean:

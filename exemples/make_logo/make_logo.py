@@ -77,7 +77,7 @@ ax.plot(x1, -y1, '#000000')
 ax.plot(x2, -y2, '#000000')
 ax.set_aspect(1)
 ax.set_axis_off()
-fig.savefig(os.path.join(os.getcwd(), "logo.png"), bbox_inches='tight')
+fig.savefig(os.path.join(os.getcwd(), "logo.png"), dpi=300, bbox_inches='tight', pad_inches=0)
 
 # %%
 import scipy.sparse as sps
