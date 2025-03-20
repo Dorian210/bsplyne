@@ -1,1 +1,4 @@
 .qodo
+bsplyne.egg-info
+build
+__pycache__

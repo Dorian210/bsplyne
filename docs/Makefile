@@ -3,7 +3,7 @@ PACKAGE = ../bsplyne
 # Dossier de sortie pour la documentation
 DOC_DIR = .
 # Path to logo file
-LOGO = logo.png
+LOGO = https://dorian210.github.io/bsplyne/logo.png
 
 .PHONY: all clean doc
 
