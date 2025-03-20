@@ -1,7 +1,7 @@
 # bsplyne
 
 <p align="center">
-  <img src="https://dorian210.github.io/bsplyne/logo.png" width="500" />
+  <img src=docs/logo.png width="500" />
 </p>
 
 **bsplyne** is a Python library for working with N-dimensional B-splines. It implements the Cox-de Boor algorithm for basis evaluation, order elevation, knot insertion, and provides a connectivity class for multi-patch structures. Additionally, it includes visualization tools with export capabilities to Paraview.
