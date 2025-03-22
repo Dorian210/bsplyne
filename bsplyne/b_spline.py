@@ -1,56 +1,76 @@
 import os
-import re
 from typing import Iterable, Union
-import xml.dom.minidom
 
 import numpy as np
 import numpy.typing as npt
 import scipy.sparse as sps
 import meshio as io
+import matplotlib as mpl
 
 from bsplyne.b_spline_basis import BSplineBasis
 from bsplyne.my_wide_product import my_wide_product
-# from wide_product import wide_product as my_wide_product
+from bsplyne.save_utils import writePVD
 
 class BSpline:
     """
-    B-Spline from a `NPa`-D parametric space into a NPh-D physical space.
-    NPh is not an attribute of this class.
+    B-Spline class for representing and manipulating B-spline curves, surfaces and volumes.
+
+    Provides functionality for evaluating, manipulating and visualizing B-splines of arbitrary dimension. 
+    Supports knot insertion, order elevation, and visualization through Paraview and Matplotlib.
 
     Attributes
     ----------
     NPa : int
-        Parametric space dimension.
-    bases : numpy.array of BSplineBasis
-        `numpy`.`array` containing a `BSplineBasis` instance for each of the 
-        `NPa` axis of the parametric space.
-
+        Dimension of the parametric space.
+    bases : np.ndarray[BSplineBasis]
+        Array containing BSplineBasis instances for each parametric dimension.
     """
+    NPa: int
+    bases: np.ndarray[BSplineBasis]
     
-    def __init__(self, degrees, knots):
+    def __init__(self, degrees: Iterable[int], knots: Iterable[npt.NDArray[np.floating]]):
         """
-        
+        Initialize a `BSpline` instance with specified degrees and knot vectors.
+
+        Creates a `BSpline` object by generating basis functions for each isoparametric dimension
+        using the provided polynomial degrees and knot vectors.
+
         Parameters
         ----------
-        degrees : numpy.array of int
-            Contains the degrees of the B-spline in each parametric dimension.
-        knots : list of numpy.array of float
-            Contains the knot vectors of the B-spline for each parametric 
-            dimension.
+        degrees : Iterable[int]
+            Collection of polynomial degrees for each isoparametric dimension.
+            The length determines the dimensionality of the parametric space (`NPa`).
+            For example:
+            - [p] for a curve
+            - [p, q] for a surface
+            - [p, q, r] for a volume
+            - ...
 
-        Returns
-        -------
-        BSpline : BSpline instance
-            Contains the ``BSpline`` object created.
+        knots : Iterable[npt.NDArray[np.floating]]
+            Collection of knot vectors for each isoparametric dimension.
+            Each knot vector must be a numpy array of `floats`.
+            The number of knot vectors must match the number of degrees.
+            For a degree `p`, the knot vector must have size `m + 1` where `m>=p`.
 
         Examples
         --------
-        Creation of a 2D shape as a `BSpline` instance :
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
-        >>> BSpline(degrees, knots)
+        Create a 2D B-spline surface:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
 
+        Create a 1D B-spline curve:
+        >>> degree = [3]
+        >>> knot = [np.array([0, 0, 0, 0, 1, 1, 1, 1], dtype='float')]
+        >>> curve = BSpline(degree, knot)
+
+        Notes
+        -----
+        - The number of control points in each dimension will be `m - p` where `m` is
+        the size of the knot vector minus 1 and `p` is the degree
+        - Each knot vector must be non-decreasing
+        - The multiplicity of each knot must not exceed `p + 1`
         """
         self.NPa = len(degrees)
         self.bases = np.empty(self.NPa, dtype='object')
@@ -60,101 +80,167 @@ class BSpline:
             self.bases[idx] = BSplineBasis(p, knot)
     
     @classmethod
-    def from_bases(cls, bases):
+    def from_bases(cls, bases: Iterable[BSplineBasis]) -> "BSpline":
         """
-        Create a ``BSpline`` instance from an array of ``BSplineBasis``.
+        Create a BSpline instance from an array of `BSplineBasis` objects.
+        This is an alternative constructor that allows direct initialization from 
+        existing basis functions rather than creating new ones from degrees and knot 
+        vectors.
 
         Parameters
         ----------
-        bases : numpy.ndarray of BSplineBasis
-            The array of ``BSplineBasis`` instances.
+        bases : Iterable[BSplineBasis]
+            An iterable (e.g. list, tuple, array) containing `BSplineBasis` instances.
+            Each basis represents one parametric dimension of the resulting B-spline.
+            The number of bases determines the dimensionality of the parametric space.
 
         Returns
         -------
         BSpline
-            Contains the ``BSpline`` object created.
+            A new `BSpline` instance with the provided basis functions.
+
+        Examples
+        --------
+        >>> basis1 = BSplineBasis(2, np.array([0, 0, 0, 1, 1, 1]))
+        >>> basis2 = BSplineBasis(2, np.array([0, 0, 0, 0.5, 1, 1, 1]))
+        >>> spline = BSpline.from_bases([basis1, basis2])
         """
         self = cls([], [])
-        self.bases = bases
-        self.NPa = self.bases.size
+        self.NPa = len(self.bases)
+        self.bases = np.empty(self.NPa, dtype='object')
+        self.bases[:] = bases
         return self
     
-    def getDegrees(self):
+    def getDegrees(self) -> npt.NDArray[np.integer]:
         """
-        Returns the degree of each basis in the parametric space.
-
-        Parameters
-        ----------
-        None
+        Returns the polynomial degree of each basis function in the isoparametric space.
 
         Returns
         -------
-        degrees : numpy.array of int
-            Contains the degrees of the B-spline.
+        degrees : npt.NDArray[np.integer]
+            Array containing the polynomial degrees of the B-spline basis functions.
+            The array has length `NPa` (dimension of isoparametric space), where each element
+            represents the degree of the corresponding isoparametric dimension.
 
         Examples
         --------
         >>> degrees = np.array([2, 2], dtype='int')
         >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
         >>> spline.getDegrees()
         array([2, 2])
 
+        Notes
+        -----
+        - For a curve (1D), returns [degree_xi]
+        - For a surface (2D), returns [degree_xi, degree_eta]
+        - For a volume (3D), returns [degree_xi, degree_eta, degree_zeta]
+        - ...
         """
         degrees = np.array([basis.p for basis in self.bases], dtype='int')
         return degrees
     
-    def getKnots(self):
+    def getKnots(self) -> list[npt.NDArray[np.floating]]:
         """
-        Returns the knot vector of each basis in the parametric space.
+        Returns the knot vector of each basis function in the isoparametric space.
 
-        Parameters
-        ----------
-        None
+        This method collects all knot vectors from each `BSplineBasis` instance stored
+        in the `bases` array. The knot vectors define the isoparametric space partitioning
+        and the regularity properties of the B-spline.
 
         Returns
         -------
-        knots : list of numpy.array of float
-            Contains the knot vectors of the B-spline.
+        knots : list[npt.NDArray[np.floating]]
+            List containing the knot vectors of the B-spline basis functions.
+            The list has length `NPa` (dimension of isoparametric space), where each element
+            is a `numpy.ndarray` containing the knots for the corresponding isoparametric dimension.
 
         Examples
         --------
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
         >>> spline.getKnots()
-        [array([0. , 0. , 0. , 0.5, 1. , 1. , 1. ]),
-         array([0. , 0. , 0. , 0.5, 1. , 1. , 1. ])]
+        [array([0., 0., 0., 0.5, 1., 1., 1.]),
+         array([0., 0., 0., 0.5, 1., 1., 1.])]
 
+        Notes
+        -----
+        - For a curve (1D), returns [`knots_xi`]
+        - For a surface (2D), returns [`knots_xi`, `knots_eta`]
+        - For a volume (3D), returns [`knots_xi`, `knots_eta`, `knots_zeta`]
+        - Each knot vector must be non-decreasing
+        - The multiplicity of interior knots determines the continuity at that point
         """
         knots = [basis.knot for basis in self.bases]
         return knots
 
-    def getNbFunc(self):
+    def getNbFunc(self) -> int:
         """
-        Compute the number of basis functions of the spline.
+        Compute the total number of basis functions in the B-spline.
+
+        This method calculates the total number of basis functions by multiplying
+        the number of basis functions in each isoparametric dimension (`n + 1` for each dimension).
 
         Returns
         -------
         int
-            Number of basis functions.
+            Total number of basis functions in the B-spline. This is equal to
+            the product of (`n + 1`) for each basis, where `n` is the last index
+            of each basis function.
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> spline.getNbFunc()
+        16
+
+        Notes
+        -----
+        - For a curve (1D), returns (`n + 1`)
+        - For a surface (2D), returns (`n1 + 1`) × (`n2 + 1`)
+        - For a volume (3D), returns (`n1 + 1`) × (`n2 + 1`) × (`n3 + 1`)
+        - The number of basis functions equals the number of control points needed
         """
         return np.prod([basis.n + 1 for basis in self.bases])
 
-    def getSpans(self):
+    def getSpans(self) -> list[tuple[float, float]]:
         """
-        Return the span of each basis in the parametric space.
+        Returns the span of each basis function in the isoparametric space.
 
-        Parameters
-        ----------
-        None
+        This method collects the spans (intervals of definition) from each `BSplineBasis`
+        instance stored in the `bases` array.
 
         Returns
         -------
-        spans : list of tuple(float, float)
-            Contains the span of the B-spline.
+        spans : list[tuple[float, float]]
+            List containing the spans of the B-spline basis functions.
+            The list has length `NPa` (dimension of isoparametric space), where each element
+            is a tuple (`a`, `b`) containing the lower and upper bounds of the span
+            for the corresponding isoparametric dimension.
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> spline.getSpans()
+        [(0.0, 1.0), (0.0, 1.0)]
+
+        Notes
+        -----
+        - For a curve (1D), returns [(`xi_min`, `xi_max`)]
+        - For a surface (2D), returns [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`)]
+        - For a volume (3D), returns [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), (`zeta_min`, `zeta_max`)]
+        - The span represents the interval where the B-spline is defined
+        - Each span is determined by the `p`-th and `(m - p)`-th knots, where `p` is the degree
+        and `m` is the last index of the knot vector
         """
         spans = [basis.span for basis in self.bases]
         return spans
@@ -178,43 +264,108 @@ class BSpline:
 #         indices = np.arange(begining, begining + self.ctrlPts.size).reshape(self.ctrlPts.shape)
 #         return indices
 
-    def linspace(self, n_eval_per_elem=10):
+    def linspace(self, n_eval_per_elem: Union[int, Iterable[int]]=10) -> tuple[npt.NDArray[np.floating], ...]:
         """
-        Generate `NPa` sets of xi values over the span of each basis.
+        Generate sets of evaluation points over the span of each basis in the isoparametric space.
+
+        This method creates evenly spaced points for each isoparametric dimension by calling
+        `linspace` on each `BSplineBasis` instance stored in the `bases` array.
 
         Parameters
         ----------
-        n_eval_per_elem : numpy.array of int or int, optional
-            Number of values per element over each parametric axis, by default 10
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for each isoparametric dimension.
+            If an `int` is provided, the same number is used for all dimensions.
+            If an `Iterable` is provided, each value corresponds to a different dimension.
+            By default, 10.
 
         Returns
         -------
-        XI : tuple of numpy.array of float
-            Set of xi values over each span.
+        XI : tuple[npt.NDArray[np.floating], ...]
+            Tuple containing arrays of evaluation points for each isoparametric dimension.
+            The tuple has length `NPa` (dimension of isoparametric space).
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> xi, eta = spline.linspace(n_eval_per_elem=2)
+        >>> xi
+        array([0.  , 0.25, 0.5 , 0.75, 1.  ])
+        >>> eta
+        array([0. , 0.5, 1. ])
+
+        Notes
+        -----
+        - For a curve (1D), returns (`xi` points, )
+        - For a surface (2D), returns (`xi` points, `eta` points)
+        - For a volume (3D), returns (`xi` points, `eta` points, `zeta` points)
+        - The number of points returned for each dimension depends on the number of
+        elements in that dimension times the value of `n_eval_per_elem`
         """
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
         XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)]) # type: ignore
         return XI
 
-    def linspace_for_integration(self, n_eval_per_elem=10, bounding_box=None):
+    def linspace_for_integration(
+        self, 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        bounding_box: Union[Iterable, None]=None
+        ) -> tuple[tuple[npt.NDArray[np.floating], ...], tuple[npt.NDArray[np.floating], ...]]:
         """
-        Generate `NPa` sets of xi values over the span of the basis, 
-        centerered on intervals of returned lengths.
+        Generate sets of evaluation points and their integration weights over each basis span.
+
+        This method creates evenly spaced points and their corresponding integration weights
+        for each isoparametric dimension by calling `linspace_for_integration` on each
+        `BSplineBasis` instance stored in the `bases` array.
 
         Parameters
         ----------
-        n_eval_per_elem : numpy.array of int or int, optional
-            Number of values per element over each parametric axis, by default 10
-        bounding_box : numpy.array of float , optional
-            Lower and upper bounds on each axis, by default [[xi0, xin], [eta0, etan], ...]
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for each isoparametric dimension.
+            If an `int` is provided, the same number is used for all dimensions.
+            If an `Iterable` is provided, each value corresponds to a different dimension.
+            By default, 10.
+
+        bounding_box : Union[Iterable[tuple[float, float]], None], optional
+            Lower and upper bounds for each isoparametric dimension.
+            If `None`, uses the span of each basis.
+            Format: [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), ...].
+            By default, None.
 
         Returns
         -------
-        XI : tuple of numpy.array of float
-            Set of xi values over each span.
-        dXI : tuple of numpy.array of float
-            Set of integration weight of each point in `XI`.
+        XI : tuple[npt.NDArray[np.floating], ...]
+            Tuple containing arrays of evaluation points for each isoparametric dimension.
+            The tuple has length `NPa` (dimension of isoparametric space).
+
+        dXI : tuple[npt.NDArray[np.floating], ...]
+            Tuple containing arrays of integration weights for each isoparametric dimension.
+            The tuple has length `NPa` (dimension of isoparametric space).
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> (xi, eta), (dxi, deta) = spline.linspace_for_integration(n_eval_per_elem=2)
+        >>> xi  # xi points
+        array([0.125, 0.375, 0.625, 0.875])
+        >>> dxi  # xi weights
+        array([0.25, 0.25, 0.25, 0.25])
+
+        Notes
+        -----
+        - For a curve (1D), returns ((`xi` points), (`xi` weights))
+        - For a surface (2D), returns ((`xi` points, `eta` points), (`xi` weights, `eta` weights))
+        - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points), 
+                                    (`xi` weights, `eta` weights, `zeta` weights))
+        - The points are centered in their integration intervals
+        - The weights represent the size of the integration intervals
         """
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
@@ -230,27 +381,70 @@ class BSpline:
         dXI = tuple(dXI)
         return XI, dXI
     
-    def gauss_legendre_for_integration(self, n_eval_per_elem=None, bounding_box=None):
+    def gauss_legendre_for_integration(
+        self, 
+        n_eval_per_elem: Union[int, Iterable[int], None]=None, 
+        bounding_box: Union[Iterable, None]=None
+        ) -> tuple[tuple[npt.NDArray[np.floating], ...], tuple[npt.NDArray[np.floating], ...]]:
         """
-        Generate a set of xi values with their coresponding weight acording to the Gauss Legendre 
-        integration method over a given bounding box.
+        Generate sets of evaluation points and their Gauss-Legendre integration weights over each basis span.
+
+        This method creates Gauss-Legendre quadrature points and their corresponding integration weights
+        for each isoparametric dimension by calling `gauss_legendre_for_integration` on each
+        `BSplineBasis` instance stored in the `bases` array.
 
         Parameters
         ----------
-        n_eval_per_elem : numpy.array of int, optional
-            Number of values per element over each parametric axis, by default `self.getDegrees() + 1`
-        bounding_box : numpy.array of float, optional
-            Lower and upper bounds, by default `self`.`span`
+        n_eval_per_elem : Union[int, Iterable[int], None], optional
+            Number of evaluation points per element for each isoparametric dimension.
+            If an `int` is provided, the same number is used for all dimensions.
+            If an `Iterable` is provided, each value corresponds to a different dimension.
+            If `None`, uses `(p + 2)//2` points per element where `p` is the degree of each basis.
+            This number of points ensures an exact integration of a `p`-th degree polynomial.
+            By default, None.
+
+        bounding_box : Union[Iterable[tuple[float, float]], None], optional
+            Lower and upper bounds for each isoparametric dimension.
+            If `None`, uses the span of each basis.
+            Format: [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), ...].
+            By default, None.
 
         Returns
         -------
-        XI : tuple of numpy.array of float
-            Set of xi values over each span.
-        dXI : tuple of numpy.array of float
-            Set of integration weight of each point in `XI`.
+        XI : tuple[npt.NDArray[np.floating], ...]
+            Tuple containing arrays of Gauss-Legendre points for each isoparametric dimension.
+            The tuple has length `NPa` (dimension of isoparametric space).
+
+        dXI : tuple[npt.NDArray[np.floating], ...]
+            Tuple containing arrays of Gauss-Legendre weights for each isoparametric dimension.
+            The tuple has length `NPa` (dimension of isoparametric space).
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> (xi, eta), (dxi, deta) = spline.gauss_legendre_for_integration()
+        >>> xi  # xi points
+        array([0.10566243, 0.39433757, 0.60566243, 0.89433757])
+        >>> dxi  # xi weights
+        array([0.25, 0.25, 0.25, 0.25])
+
+        Notes
+        -----
+        - For a curve (1D), returns ((`xi` points), (`xi` weights))
+        - For a surface (2D), returns ((`xi` points, `eta` points), (`xi` weights, `eta` weights))
+        - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points), 
+                                    (`xi` weights, `eta` weights, `zeta` weights))
+        - The points and weights follow the Gauss-Legendre quadrature rule
+        - When `n_eval_per_elem` is `None`, uses `(p + 2)//2` points per element for exact
+        integration of polynomials up to degree `p`
         """
         if n_eval_per_elem is None:
-            n_eval_per_elem = self.getDegrees() + 1
+            n_eval_per_elem = (self.getDegrees() + 2)//2
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
         if bounding_box is None:
             bounding_box = [None]*self.NPa # type: ignore
         XI = []
@@ -265,67 +459,134 @@ class BSpline:
     
     def normalize_knots(self):
         """
-        Maps the knots vectors to [0, 1].
+        Maps all knot vectors to the interval [0, 1] in each isoparametric dimension.
+
+        This method normalizes the knot vectors of each `BSplineBasis` instance stored
+        in the `bases` array by applying an affine transformation that maps the span
+        interval to [0, 1].
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([-1, -1, -1, 0, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 2, 4, 4, 4], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> spline.getKnots()
+        [array([-1., -1., -1.,  0.,  1.,  1.,  1.]),
+         array([0., 0., 0., 2., 4., 4., 4.])]
+        >>> spline.normalize_knots()
+        >>> spline.getKnots()
+        [array([0., 0., 0., 0.5, 1., 1., 1.]),
+         array([0., 0., 0., 0.5, 1., 1., 1.])]
+
+        Notes
+        -----
+        - The transformation preserves the relative spacing between knots
+        - The transformation preserves the multiplicity of knots
+        - The transformation is applied independently to each isoparametric dimension
+        - This operation modifies the knot vectors in place
         """
         for basis in self.bases:
             basis.normalize_knots()
     
-    def DN(self, XI, k=0):
+    def DN(
+        self, 
+        XI: Union[npt.NDArray[np.floating], tuple[npt.NDArray[np.floating], ...]], 
+        k: Union[int, Iterable[int]]=0
+        ) -> Union[sps.spmatrix, np.ndarray[sps.spmatrix]]:
         """
-        Compute the `k`-th derivative of the B-spline basis at the points 
-        in the parametric space given as input such that a dot product 
-        with the reshaped and transposed control points evaluates the 
-        B-spline.
+        Compute the `k`-th derivative of the B-spline basis at given points in the isoparametric space.
+
+        This method evaluates the basis functions or their derivatives at specified points, returning
+        a matrix that can be used to evaluate the B-spline through a dot product with the control points.
 
         Parameters
         ----------
-        XI : numpy.array of float or tuple of numpy.array of float
-            If `numpy`.`array` of `float`, contains the `NPa`-uplets of 
-            parametric coordinates as [[xi_0, ...], [eta_a, ...], ...].
-            Else, if `tuple` of `numpy`.`array` of `float`, contains the `NPa` 
-            parametric coordinates as [[xi_0, ...], [eta_0, ...], ...].
-        k : list of int or int, optional
-            If `numpy`.`array` of `int`, or if k is 0, compute the `k`-th 
-            derivative of the B-spline basis evaluated on each axis of the 
-            parametric space.
-            If `int`, compute the `k`-th derivative along every axis. For 
-            example, if `k` is 1, compute the gradient, if `k` is 2, compute 
-            the hessian, and so on.
-            , by default 0
+        XI : Union[npt.NDArray[np.floating], tuple[npt.NDArray[np.floating], ...]]
+            Points in the isoparametric space where to evaluate the basis functions.
+            Two input formats are accepted:
+            1. `numpy.ndarray`: Array of coordinates with shape (`NPa`, n_points).
+            Each column represents one evaluation point [`xi`, `eta`, ...].
+            The resulting matrices will have shape (n_points, number of functions).
+            2. `tuple`: Contains `NPa` arrays of coordinates (`xi`, `eta`, ...).
+            The resulting matrices will have (n_xi × n_eta × ...) rows.
+
+        k : Union[int, Iterable[int]], optional
+            Derivative orders to compute. Two formats are accepted:
+            1. `int`: Same derivative order along all axes. Common values:
+            - `k=0`: Evaluate basis functions (default)
+            - `k=1`: Compute first derivatives (gradient)
+            - `k=2`: Compute second derivatives (hessian)
+            2. `list[int]`: Different derivative orders for each axis.
+            Example: `[1, 0]` computes first derivative w.r.t `xi`, no derivative w.r.t `eta`.
+            By default, 0.
 
         Returns
         -------
-        DN : scipy.sparse.csr_matrix of float or numpy.array of scipy.sparse.csr_matrix of float
-            Contains the basis of the B-spline.
+        DN : Union[sps.spmatrix, np.ndarray[sps.spmatrix]]
+            Sparse matrix or array of sparse matrices containing the basis evaluations:
+            - If `k` is a `list` or is 0: Returns a single sparse matrix containing the mixed 
+            derivative specified by the list.
+            - If `k` is an `int` > 0: Returns an array of sparse matrices with shape [`NPa`]*`k`.
+            For example, if `k=1`, returns `NPa` matrices containing derivatives along each axis.
 
         Examples
         --------
-        Evaluation of a 2D BSpline basis on these `XI` values : [[0, 0.5], [1, 0]]
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        Create a 2D quadratic B-spline:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
-        >>> XI = np.array([[0, 0.5], [1, 0]], dtype='float')
-        >>> spline.DN(XI, [0, 0]).A
-        array([[0. , 0. , 0. , 1. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. , 0. ],
-               [0. , 0. , 0. , 0. , 0.5, 0. , 0. , 0. , 0.5, 0. , 0. , 0. , 0. , 0. , 0. , 0. ]])
-        
-        Evaluation of the 2D BSpline basis's derivative along the first axis :
-        >>> XI = (np.array([0, 0.5], dtype='float'), 
-                  np.array([1], dtype='float'))
-        >>> spline.DN(XI, [1, 0]).A
-        array([[ 0., -0., -0., -4.,  0.,  0.,  0.,  4.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.],
-               [ 0.,  0.,  0.,  0., -2.,  0.,  0.,  0.,  2.,  0.,  0.,  0.,  0.,  0.,  0.,  0.]])
 
+        Evaluate basis functions at specific points using array input:
+        >>> XI = np.array([[0, 0.5, 1],     # xi coordinates
+        ...                [0, 0.5, 1]])    # eta coordinates
+        >>> N = spline.DN(XI, k=0)
+        >>> N.A  # Convert sparse matrix to dense for display
+        array([[1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+              [0., 0., 0., 0., 0., 0.25, 0.25, 0., 0., 0.25, 0.25, 0., 0., 0., 0., 0.],
+              [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1.]])
+
+        Compute first derivatives using tuple input:
+        >>> xi = np.array([0, 0.5])
+        >>> eta = np.array([0, 1])
+        >>> dN = spline.DN((xi, eta), k=1)  # Returns [NPa] matrices
+        >>> len(dN)  # Number of derivative matrices
+        2
+        >>> dN[0].A  # Derivative w.r.t xi
+        array([[-4., 0., 0., 0., 4., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0., 0., 0.,-4., 0., 0., 0., 4., 0., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0., 0., 0., 0.,-2., 0., 0., 0., 2., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0., 0., 0., 0., 0., 0., 0.,-2., 0., 0., 0., 2., 0., 0., 0., 0.]])
+        >>> dN[1].A  # Derivative w.r.t eta
+        array([[-4., 4., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0., 0.,-4., 4., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0., 0., 0., 0.,-2., 2., 0., 0.,-2., 2., 0., 0., 0., 0., 0., 0.],
+               [ 0., 0., 0., 0., 0., 0.,-2., 2., 0., 0.,-2., 2., 0., 0., 0., 0.]])
+
+        Compute mixed derivatives:
+        >>> d2N = spline.DN((xi, eta), k=[1, 1])  # Second derivative: d²/dxi·deta
+        >>> d2N.A
+        array([[16.,-16.,  0.,  0.,-16.,16.,  0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0.,  0., 16.,-16.,  0., 0.,-16.,16., 0., 0., 0., 0., 0., 0., 0., 0.],
+               [ 0.,  0.,  0.,  0.,  8.,-8.,  0., 0.,-8., 8., 0., 0., 0., 0., 0., 0.],
+               [ 0.,  0.,  0.,  0.,  0., 0.,  8.,-8., 0.,-0.,-8., 8., 0., 0., 0., 0.]])
+
+        Notes
+        -----
+        - For evaluating the B-spline with control points in `NPh`-D space:
+        `values = DN @ ctrlPts.reshape((NPh, -1)).T`
+        - When using tuple input format for `XI`, points are evaluated at all combinations of coordinates
+        - When using array input format for `XI`, each column represents one evaluation point
+        - The gradient (`k=1`) returns `NPa` matrices for derivatives along each axis
+        - Mixed derivatives can be computed using a list of derivative orders
         """
         
         if isinstance(XI, np.ndarray):
             fct = my_wide_product
             XI = XI.reshape((self.NPa, -1))
-            s1 = XI.shape[1]
         else:
             fct = sps.kron
-            s1 = 1
         
         if isinstance(k, int):
             if k==0:
@@ -366,67 +627,92 @@ class BSpline:
                     DN = fct(DN, DN_elem)
             return DN
     
-    def __call__(self, ctrlPts, XI, k=0):
+    def __call__(
+        self, 
+        ctrlPts: npt.NDArray[np.floating], 
+        XI: Union[npt.NDArray[np.floating], tuple[npt.NDArray[np.floating], ...]], 
+        k: Union[int, Iterable[int]]=0
+        ) -> npt.NDArray[np.floating]:
         """
-        Evaluate the `k`-th derivative of the B-spline.
+        Evaluate the `k`-th derivative of the B-spline at given points in the isoparametric space.
+
+        This method evaluates the B-spline or its derivatives at specified points by computing
+        the basis functions and performing a dot product with the control points.
 
         Parameters
         ----------
-        ctrlPts : numpy.array of float
-            Contains the control points of the B-spline as [X, Y, Z, ...].
-            Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
-        XI : numpy.array of float or tuple of numpy.array of float
-            If `numpy`.`array` of `float`, contains the `NPa`-uplets of 
-            parametric coordinates as [[xi_0, ...], [eta_a, ...], ...].
-            Else, if `tuple` of `numpy`.`array` of `float`, contains the `NPa` 
-            parametric coordinates as [[xi_0, ...], [eta_0, ...], ...].
-        k : numpy.array of int or int, optional
-            If `numpy`.`array` of `int`, or if k is 0, compute the `k`-th 
-            derivative of the B-spline evaluated on each axis of the parametric 
-            space.
-            If `int`, compute the `k`-th derivative along every axis. For 
-            example, if `k` is 1, compute the gradient, if `k` is 2, compute 
-            the hessian, and so on.
-            , by default 0
+        ctrlPts : npt.NDArray[np.floating]
+            Control points defining the B-spline geometry.
+            Shape: (`NPh`, n1, n2, ...) where:
+            - `NPh` is the dimension of the physical space
+            - ni is the number of control points in the i-th isoparametric dimension, 
+            i.e. the number of basis functions on this isoparametric axis
+
+        XI : Union[npt.NDArray[np.floating], tuple[npt.NDArray[np.floating], ...]]
+            Points in the isoparametric space where to evaluate the B-spline.
+            Two input formats are accepted:
+            1. `numpy.ndarray`: Array of coordinates with shape (`NPa`, n_points).
+            Each column represents one evaluation point [`xi`, `eta`, ...].
+            2. `tuple`: Contains `NPa` arrays of coordinates (`xi`, `eta`, ...).
+
+        k : Union[int, Iterable[int]], optional
+            Derivative orders to compute. Two formats are accepted:
+            1. `int`: Same derivative order along all axes. Common values:
+            - `k=0`: Evaluate the B-spline mapping (default)
+            - `k=1`: Compute first derivatives (gradient)
+            - `k=2`: Compute second derivatives (hessian)
+            2. `list[int]`: Different derivative orders for each axis.
+            Example: `[1, 0]` computes first derivative w.r.t `xi`, no derivative w.r.t `eta`.
+            By default, 0.
 
         Returns
         -------
-        values : numpy.array of float
-            Evaluation of the `k`-th derivative of the B-spline at the 
-            parametric space's coordinates given. This array contains the 
-            physical space coordinates corresponding as [X, Y, ...]. 
-            If `XI` is a tuple, its shape is 
-            (NPh, shape of the derivative, len(xi), len(eta), ...).
-            Else, its shape is 
-            (NPh, shape of the derivative, *`XI`.shape[1:]).
+        values : npt.NDArray[np.floating]
+            B-spline evaluation at the specified points.
+            Shape depends on input format and derivative order:
+            - For array input: (`NPh`, shape of derivative, n_points)
+            - For tuple input: (`NPh`, shape of derivative, n_xi, n_eta, ...)
+            Where "shape of derivative" depends on `k`:
+            - For `k=0` or `k` as list: Empty shape
+            - For `k=1`: Shape is (`NPa`,) for gradient
+            - For `k>1` as int: Shape is (`NPa`,) repeated `k` times
 
         Examples
         --------
-        Evaluation of a 2D BSpline on a grid :
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
-        >>> ctrlPts = np.random.rand(3, 4, 4)
+        Create a 2D quadratic B-spline:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
-        >>> XI = (np.array([0, 0.5], dtype='float'), 
-                  np.array([1], dtype='float'))
-        >>> spline(ctrlPts, XI, [0, 0])
-        array([[[0.0247786 ],
-                [0.69670203]],
-        
-               [[0.80417637],
-                [0.8896871 ]],
-        
-               [[0.8208673 ],
-                [0.51415427]]])
-        
-        Evaluation of a 2D BSpline on an array of couples :
-        >>> XI = np.array([[0, 0.5], [1, 0]], dtype='float')
-        >>> spline(ctrlPts, XI, [0, 0])
-        array([[0.0247786 , 0.42344584],
-               [0.80417637, 0.42489571],
-               [0.8208673 , 0.07327555]])
+        >>> ctrlPts = np.random.rand(3, 4, 4)  # 3D control points
 
+        Evaluate B-spline at specific points using array input:
+        >>> XI = np.array([[0, 0.5, 1],    # xi coordinates
+        ...                [0, 0.5, 1]])    # eta coordinates
+        >>> values = spline(ctrlPts, XI, k=0)
+        >>> values.shape
+        (3, 3)  # (NPh, n_points)
+
+        Evaluate gradient using tuple input:
+        >>> xi = np.array([0, 0.5])
+        >>> eta = np.array([0, 1])
+        >>> derivatives = spline(ctrlPts, (xi, eta), k=1)
+        >>> derivatives.shape
+        (2, 3, 2, 2)  # (NPa, NPh, n_xi, n_eta)
+
+        Compute mixed derivatives:
+        >>> mixed = spline(ctrlPts, (xi, eta), k=[1, 1])
+        >>> mixed.shape
+        (3, 2, 2)  # (NPh, n_xi, n_eta)
+
+        Notes
+        -----
+        - The method first computes basis functions using `DN` then performs a dot product
+        with control points
+        - When using tuple input format, points are evaluated at all combinations of coordinates
+        - When using array input format, each column represents one evaluation point
+        - The gradient (`k=1`) returns derivatives along each isoparametric axis
+        - Mixed derivatives can be computed using a list of derivative orders
         """
         if isinstance(XI, np.ndarray):
             XI_shape = XI.shape[1:]
@@ -442,41 +728,73 @@ class BSpline:
             values = (DN @ ctrlPts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
         return values
     
-    def knotInsertion(self, ctrlPts, knots_to_add: Iterable[Union[npt.NDArray[np.float64], int]]):
+    def knotInsertion(
+        self, 
+        ctrlPts: npt.NDArray[np.floating], 
+        knots_to_add: Iterable[Union[npt.NDArray[np.float64], int]]
+        ) -> npt.NDArray[np.floating]:
         """
-        Add the knots passed in parameter to the knot vector and modify the 
-        attributes so that the evaluation of the spline stays the same.
+        Add knots to the B-spline while preserving its geometry.
+
+        This method performs knot insertion by adding new knots to each isoparametric dimension
+        and computing the new control points to maintain the exact same geometry. The method
+        modifies the `BSpline` object by updating its basis functions with the new knots.
 
         Parameters
         ----------
-        ctrlPts : numpy.array of float
-            Contains the control points of the B-spline as [X, Y, Z, ...].
-            Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
-        knots_to_add : Iterable[Union[npt.NDArray[np.float64], int]]
-            Refinement on each axis :
-            If `NDArray`, contains the knots to add on said axis. It must not 
-            contain knots outside of the old knot vector's interval.
-            If `int`, correspond to the number of knots to add in each B-spline 
-            element.
+        ctrlPts : npt.NDArray[np.floating]
+            Control points defining the B-spline geometry.
+            Shape: (`NPh`, n1, n2, ...) where:
+            - `NPh` is the dimension of the physical space
+            - ni is the number of control points in the i-th isoparametric dimension
+
+        knots_to_add : Iterable[Union[npt.NDArray[np.floating], int]]
+            Refinement specification for each isoparametric dimension.
+            For each dimension, two formats are accepted:
+            1. `numpy.ndarray`: Array of knots to insert. These knots must lie within
+            the span of the existing knot vector.
+            2. `int`: Number of equally spaced knots to insert in each element.
 
         Returns
         -------
-        ctrlPts : numpy.array of float
-            Contains the control points of the B-spline as [X, Y, Z, ...].
-            Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
+        new_ctrlPts : npt.NDArray[np.floating]
+            New control points after knot insertion.
+            Shape: (`NPh`, m1, m2, ...) where mi ≥ ni is the new number of
+            control points in the i-th isoparametric dimension.
 
         Examples
         --------
-        Knot insertion on a 2D BSpline in a 3D space :
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
-        >>> ctrlPts = np.random.rand(3, 4, 4)
+        Create a 2D quadratic B-spline and insert knots:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
-        >>> knots_to_add = [np.array([0.5, 0.75], dtype='float'), 
-                            np.array([], dtype='float')]
-        >>> ctrlPts = pline.knotInsertion(ctrlPts, knots_to_add)
+        >>> ctrlPts = np.random.rand(3, 4, 4)  # 3D control points
 
+        Insert specific knots in first dimension only:
+        >>> knots_to_add = [np.array([0.25, 0.75], dtype='float'),
+        ...                 np.array([], dtype='float')]
+        >>> new_ctrlPts = spline.knotInsertion(ctrlPts, knots_to_add)
+        >>> new_ctrlPts.shape
+        (3, 6, 4)  # Two new control points added in first dimension
+        >>> spline.getKnots()[0]  # The knot vector is modified
+        array([0.  , 0.  , 0.  , 0.25, 0.5 , 0.75, 1.  , 1.  , 1.  ])
+
+        Insert two knots per element in both dimensions:
+        >>> new_ctrlPts = spline.knotInsertion(new_ctrlPts, [1, 1])
+        >>> new_ctrlPts.shape
+        (3, 10, 6)  # Uniform refinement in both dimensions
+        >>> spline.getKnots()[0]  # The knot vectors are further modified
+        array([0.   , 0.   , 0.   , 0.125, 0.25 , 0.375, 0.5  , 0.625, 0.75 ,
+               0.875, 1.   , 1.   , 1.   ])
+
+        Notes
+        -----
+        - Knot insertion preserves the geometry and parameterization of the B-spline
+        - The number of new control points depends on the number and multiplicity of inserted knots
+        - When using integer input, knots are inserted with uniform spacing in each element
+        - The method modifies the basis functions but maintains `C^{p-m}` continuity,
+        where `p` is the degree and `m` is the multiplicity of the inserted knot
         """
         true_knots_to_add = []
         for axis, knots_to_add_elem in enumerate(knots_to_add):
@@ -505,36 +823,63 @@ class BSpline:
         ctrlPts = pts.reshape((NPh, *pts_shape))
         return ctrlPts
     
-    def orderElevation(self, ctrlPts, t):
+    def orderElevation(
+        self, 
+        ctrlPts: npt.NDArray[np.floating], 
+        t: Iterable[int]
+        ) -> npt.NDArray[np.floating]:
         """
-        Performs the order elevation algorithm on every B-spline basis and 
-        apply the changes to the control points of the B-spline.
+        Elevate the polynomial degree of the B-spline while preserving its geometry.
+
+        This method performs order elevation by increasing the polynomial degree of each
+        isoparametric dimension and computing the new control points to maintain the exact
+        same geometry. The method modifies the `BSpline` object by updating its basis
+        functions with the new degrees.
 
         Parameters
         ----------
-        ctrlPts : numpy.array of float
-            Contains the control points of the B-spline as [X, Y, Z, ...].
-            Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
-        t : numpy.array of int
-            New degree of each B-spline basis will be its current degree plus 
-            the value of `t` corresponding.
+        ctrlPts : npt.NDArray[np.floating]
+            Control points defining the B-spline geometry.
+            Shape: (`NPh`, n1, n2, ...) where:
+            - `NPh` is the dimension of the physical space
+            - ni is the number of control points in the i-th isoparametric dimension
+
+        t : Iterable[int]
+            Degree elevation for each isoparametric dimension.
+            For each dimension i, the new degree will be `p_i + t_i` where `p_i`
+            is the current degree.
 
         Returns
         -------
-        ctrlPts : numpy.array of float
-            Contains the control points of the B-spline as [X, Y, Z, ...].
-            Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
+        new_ctrlPts : npt.NDArray[np.floating]
+            New control points after order elevation.
+            Shape: (`NPh`, m1, m2, ...) where mi ≥ ni is the new number of
+            control points in the i-th isoparametric dimension.
 
         Examples
         --------
-        Order elevation on a 2D BSpline in a 3D space :
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
-        >>> ctrlPts = np.random.rand(3, 4, 4)
+        Create a 2D quadratic B-spline and elevate its order:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
-        >>> ctrlPts = spline.knotInsertion(ctrlPts, [1, 0])
+        >>> ctrlPts = np.random.rand(3, 4, 4)  # 3D control points
 
+        Elevate order by 1 in first dimension only:
+        >>> t = [1, 0]  # Increase degree by 1 in first dimension
+        >>> new_ctrlPts = spline.orderElevation(ctrlPts, t)
+        >>> new_ctrlPts.shape
+        (3, 6, 4)  # Two new control points added in first dimension (one per element)
+        >>> spline.getDegrees()  # The degrees are modified
+        array([3, 2])
+
+        Notes
+        -----
+        - Order elevation preserves the geometry and parameterization of the B-spline
+        - The number of new control points depends on the current degree and number of 
+        elements
+        - The method modifies the `BSpline` object by updating its basis functions
+        - This operation is more computationally expensive than knot insertion
         """
         pts_shape = np.empty(self.NPa, dtype='int')
         STD = None
@@ -552,22 +897,61 @@ class BSpline:
         ctrlPts = pts.reshape((NPh, *pts_shape))
         return ctrlPts
     
-    def greville_abscissa(self, return_weights=False):
+    def greville_abscissa(
+        self, 
+        return_weights: bool=False
+        ) -> Union[list[npt.NDArray[np.floating]], tuple[list[npt.NDArray[np.floating]], list[npt.NDArray[np.floating]]]]:
         """
-        Compute the Greville abscissa.
-        
+        Compute the Greville abscissa and optionally their weights for each isoparametric dimension.
+
+        The Greville abscissa can be interpreted as the "position" of the control points in the 
+        isoparametric space. They are often used as interpolation points for B-splines.
+
         Parameters
         ----------
         return_weights : bool, optional
-            If `True`, return the weight, the length of the span of the basis 
-            function corresponding to each abscissa, by default `False`
+            If `True`, also returns the weights (span lengths) of each basis function.
+            By default, False.
 
         Returns
         -------
-        greville : list of np.array of float
-            Greville abscissa on each parametric axis.
-        weights : list of np.array of float
-            Span of each basis function on each parametric axis.
+        greville : list[npt.NDArray[np.floating]]
+            List containing the Greville abscissa for each isoparametric dimension.
+            The list has length `NPa`, where each element is an array of size `n + 1`,
+            `n` being the last index of the basis functions in that dimension.
+
+        weights : list[npt.NDArray[np.floating]], optional
+            Only returned if `return_weights` is `True`.
+            List containing the weights for each isoparametric dimension.
+            The list has length `NPa`, where each element is an array containing
+            the span length of each basis function.
+
+        Examples
+        --------
+        Compute Greville abscissa for a 2D B-spline:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> greville = spline.greville_abscissa()
+        >>> greville[0]  # xi coordinates
+        array([0.  , 0.25, 0.75, 1.  ])
+        >>> greville[1]  # eta coordinates
+        array([0. , 0.5, 1. ])
+
+        Compute both abscissa and weights:
+        >>> greville, weights = spline.greville_abscissa(return_weights=True)
+        >>> weights[0]  # weights for xi direction
+        array([0.5, 1. , 1. , 0.5])
+
+        Notes
+        -----
+        - For a curve (1D), returns [`xi` abscissa]
+        - For a surface (2D), returns [`xi` abscissa, `eta` abscissa]
+        - For a volume (3D), returns [`xi` abscissa, `eta` abscissa, `zeta` abscissa]
+        - The Greville abscissa are computed as averages of `p` consecutive knots
+        - The weights represent the size of the support of each basis function
+        - The number of abscissa in each dimension equals the number of control points
         """
         greville = []
         weights = []
@@ -888,83 +1272,134 @@ class BSpline:
             mesh = io.Mesh(points, cells, point_data_step) # type: ignore
             mesh.write(file_prefix+"_"+str(i)+".vtu")
     
-    def saveParaview(self, ctrlPts, path, name, n_step=1, n_eval_per_elem=10, fields=None, groups=None, make_pvd=True, verbose=True, fiels_on_interior_only=True):
+    def saveParaview(
+        self, 
+        ctrlPts: npt.NDArray[np.floating], 
+        path: str, 
+        name: str, 
+        n_step: int=1, 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        fields: Union[dict, None]=None, 
+        groups: Union[dict[str, dict[str, Union[str, int]]], None]=None, 
+        make_pvd: bool=True, 
+        verbose: bool=True, 
+        fiels_on_interior_only: bool=True
+        ) -> dict[str, dict[str, Union[str, int]]]:
         """
-        Saves a plot as a set of .vtu files with a .pvd file.
+        Save B-spline visualization data as Paraview files.
+
+        This method creates three types of visualization files:
+        - Interior mesh showing the B-spline surface/volume
+        - Element borders showing the mesh structure
+        - Control points mesh showing the control structure
+        
+        All files are saved in VTU format with an optional PVD file to group them.
 
         Parameters
         ----------
-        ctrlPts : numpy.array of float
-            Contains the control points of the B-spline as [X, Y, Z, ...].
-            Its shape : (NPh, nb elem for dim 1, ..., nb elem for dim `NPa`)
-        path : string
-            Path of the directory in which all the files to show in Paraview 
-            will be dumped.
-        name : string
-            Prefix of the files created.
-        n_step : int
-            Number of time steps to plot.
-        n_eval_per_elem : numpy.array of int or int, default 10
-            Contains the number of evaluation of the B-spline in each 
-            direction of the parametric space for each element.
-        fields : dict of function or of numpy.array of float, default None
-            Fields to plot at each time step. The name of the field will 
-            be the dict key. 
-            If the value given is a `function`, it must take the spline 
-            and a `tuple` of parametric points that could be given to 
-            `self`.`DN` for example. It must return its value for 
-            each time step and on each combination of parametric points.
-            `function`(`BSpline` spline, 
-                       `tuple`(`numpy`.`array` of `float`) XI) 
-            -> `numpy`.`array` of `float` of shape 
-            (`n_step`, nb combinations of XI, size for paraview)
-            If the value given is a `numpy`.`array` of `float`, the 
-            shape must be :
-            (`n_step`, size for paraview, *`ctrlPts`.`shape`[1:]) 
-        groups : dict of dict, default None
-            `dict` (out) of `dict` (in) as :
-            - (out) : 
-                * "interior" : (in) type of `dict`, 
-                * "elements_borders" : (in) type of `dict`, 
-                * "control_points" : (in) type of `dict`.
-                * other keys from the input that are not checked
-            - (in) : 
-                * "ext" : name of the extention of the group, 
-                * "npart" : number of parts to plot together,
-                * "nstep" : number of time steps.
-        make_pvd : bool, default True
-            If True, create a PVD file for all the data in `groups`.
-        verbose : bool, default True
-            If True, print the advancement state to the standard output.
-        fiels_on_interior_only: bool, default True
-            Whether to save the fields on the control mesh and elements boder too.
+        ctrlPts : npt.NDArray[np.floating]
+            Control points defining the B-spline geometry.
+            Shape: (`NPh`, n1, n2, ...) where:
+            - `NPh` is the dimension of the physical space
+            - ni is the number of control points in the i-th isoparametric dimension
+
+        path : str
+            Directory path where the PV files will be saved
+
+        name : str
+            Base name for the output files
+
+        n_step : int, optional
+            Number of time steps to save. By default, 1.
+
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for each isoparametric dimension.
+            By default, 10.
+            - If an `int` is provided, the same number is used for all dimensions.
+            - If an `Iterable` is provided, each value corresponds to a different dimension.
+
+        fields : Union[dict, None], optional
+            Fields to visualize at each time step. Dictionary format:
+            {
+                "field_name": `field_value`
+            }
+            where `field_value` can be either:
+            
+            1. A numpy array with shape (`n_step`, `size`, `*ctrlPts.shape[1:]`) where:
+            - `n_step`: Number of time steps
+            - `size`: Size of the field at each point (1 for scalar, 3 for vector)
+            - `*ctrlPts.shape[1:]`: Same shape as control points (excluding `NPh`)
+            
+            2. A function that computes field values (`npt.NDArray[np.floating]`) at given 
+            points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation 
+            points for each dimension (`tuple[npt.NDArray[np.floating], ...]`).
+            The result should be an array of shape (`n_step`, `n_points`, `size`) where:
+            - `n_step`: Number of time steps
+            - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
+            - `size`: Size of the field at each point (1 for scalar, 3 for vector)
+            
+            By default, None.
+
+        groups : Union[dict[str, dict[str, Union[str, int]]], None], optional
+            Nested dictionary specifying file groups for PVD organization. Format:
+            {
+                "group_name": {
+                    "ext": str,     # File extension (e.g., "vtu")
+                    "npart": int,   # Number of parts in the group
+                    "nstep": int    # Number of timesteps
+                }
+            }
+            The method automatically creates/updates three groups:
+            - "interior": For the B-spline surface/volume mesh
+            - "elements_borders": For the element boundary mesh
+            - "control_points": For the control point mesh
+            
+            If provided, existing groups are updated; if None, these groups are created.
+            By default, None.
+
+        make_pvd : bool, optional
+            Whether to create a PVD file grouping all VTU files. By default, True.
+
+        verbose : bool, optional
+            Whether to print progress information. By default, True.
+
+        fiels_on_interior_only : bool, optional
+            Whether to save fields only on the interior mesh (`True`) or on all meshes (`False`).
+            By default, True.
 
         Returns
         -------
-        groups : dict of dict
-            `dict` (out) of `dict` (in) as :
-            - (out) : 
-                * "interior" : (in) type of `dict`, 
-                * "elements_borders" : (in) type of `dict`, 
-                * "control_points" : (in) type of `dict`.
-                * other keys from the input that are not checked
-            - (in) : 
-                * "ext" : name of the extention of the group, 
-                * "npart" : number of parts to plot together,
-                * "nstep" : number of time steps.
+        groups : dict[str, dict[str, Union[str, int]]]
+            Updated groups dictionary with information about saved files.
 
         Examples
         --------
-        Save a 2D BSpline in a 3D space in the file file.pvd at the 
-        location /path/to/file :
-        >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
-                     np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
-        >>> ctrlPts = np.random.rand(3, 4, 4)
+        Save a 2D B-spline visualization:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
-        >>> spline.saveParaview(ctrlPts, "/path/to/file", "file")
+        >>> ctrlPts = np.random.rand(3, 4, 4)  # 3D control points
+        >>> spline.saveParaview(ctrlPts, "./output", "bspline")
 
+        Save with a custom field:
+        >>> def displacement(spline, XI):
+        ...     # Compute displacement field
+        ...     return np.random.rand(1, np.prod([x.size for x in XI]), 3)
+        >>> fields = {"displacement": displacement}
+        >>> spline.saveParaview(ctrlPts, "./output", "bspline", fields=fields)
+
+        Notes
+        -----
+        - Creates three types of VTU files for each time step:
+            - {name}_interior_{part}_{step}.vtu
+            - {name}_elements_borders_{part}_{step}.vtu
+            - {name}_control_points_{part}_{step}.vtu
+        - If `make_pvd=True`, creates a PVD file named {name}.pvd
+        - Fields can be visualized as scalars or vectors in Paraview
+        - The method supports time-dependent visualization through `n_step`
         """
+        
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa
         
@@ -1019,7 +1454,7 @@ class BSpline:
             print(control_points, "done")
         
         if make_pvd:
-            _writePVD(os.path.join(path, name), groups)
+            writePVD(os.path.join(path, name), groups)
         
         return groups
     
@@ -1057,10 +1492,113 @@ class BSpline:
         else:
             raise NotImplementedError("Can only export curves, sufaces or volumes !")
     
-    def plotPV(self, ctrl_pts):
-        pass
+    # def plotPV(self, ctrl_pts):
+    #     pass
     
-    def plotMPL(self, ctrl_pts, n_eval_per_elem=10, ax=None, ctrl_color='#1b9e77', interior_color='#7570b3', elem_color='#666666', border_color='#d95f02'):
+    def plotMPL(
+        self, 
+        ctrl_pts: npt.NDArray[np.floating], 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        ax: Union[mpl.axes.Axes, None]=None, 
+        ctrl_color: str='#1b9e77', 
+        interior_color: str='#7570b3', 
+        elem_color: str='#666666', 
+        border_color: str='#d95f02'
+        ):
+        """
+        Plot the B-spline using Matplotlib.
+
+        Creates a visualization of the B-spline geometry showing the control mesh,
+        B-spline surface/curve, element borders, and patch borders. Supports plotting
+        1D curves and 2D surfaces in 2D space, and 2D surfaces and 3D volumes in 3D space.
+
+        Parameters
+        ----------
+        ctrl_pts : numpy.ndarray of float
+            Control points defining the B-spline geometry.
+            Shape: (NPh, n1, n2, ...) where:
+            - NPh is the dimension of the physical space (2 or 3)
+            - ni is the number of control points in the i-th isoparametric dimension
+
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for visualizing the B-spline.
+            Can be specified as:
+            - Single integer: Same number for all dimensions
+            - Iterable of integers: Different numbers for each dimension
+            By default, 10.
+
+        ax : Union[mpl.axes.Axes, None], optional
+            Matplotlib axes for plotting. If None, creates a new figure and axes.
+            For 3D visualizations, must be a 3D axes if provided (created with 
+            `projection='3d'`).
+            Default is None (creates new axes).
+
+        ctrl_color : str, optional
+            Color for the control mesh visualization:
+            - Applied to control points (markers)
+            - Applied to control mesh lines
+            Default is '#1b9e77' (green).
+
+        interior_color : str, optional
+            Color for the B-spline geometry:
+            - For curves: Line color
+            - For surfaces: Face color (with transparency)
+            - For volumes: Face color of boundary surfaces (with transparency)
+            Default is '#7570b3' (purple).
+
+        elem_color : str, optional
+            Color for element boundary visualization:
+            - Shows internal mesh structure
+            - Helps visualize knot locations
+            Default is '#666666' (gray).
+
+        border_color : str, optional
+            Color for patch boundary visualization:
+            - Outlines the entire B-spline patch
+            - Helps distinguish patch edges
+            Default is '#d95f02' (orange).
+
+        Examples
+        --------
+        Plot a 2D curve in 2D space:
+        >>> degrees = [2]
+        >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> ctrl_pts = np.random.rand(2, 3)  # 2D control points
+        >>> spline.plotMPL(ctrl_pts)
+
+        Plot a 2D surface in 3D space:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> ctrl_pts = np.random.rand(3, 3, 3)  # 3D control points
+        >>> spline.plotMPL(ctrl_pts)
+
+        Plot on existing axes with custom colors:
+        >>> fig = plt.figure()
+        >>> ax = fig.add_subplot(projection='3d')
+        >>> spline.plotMPL(ctrl_pts, ax=ax, ctrl_color='red', interior_color='blue')
+
+        Notes
+        -----
+        Visualization components:
+        - Control mesh: Shows control points and their connections
+        - B-spline: Shows the actual curve/surface/volume
+        - Element borders: Shows the boundaries between elements
+        - Patch borders: Shows the outer boundaries of the B-spline
+
+        Supported configurations:
+        - 1D B-spline in 2D space (curve)
+        - 2D B-spline in 2D space (surface)
+        - 2D B-spline in 3D space (surface)
+        - 3D B-spline in 3D space (volume)
+
+        For 3D visualization:
+        - Surfaces are shown with transparency
+        - Volume visualization shows the faces with transparency
+        - View angle is automatically set for surfaces based on surface normal
+        """
         import matplotlib.pyplot as plt
         from matplotlib.collections import LineCollection
         from matplotlib.patches import Polygon
@@ -1163,52 +1701,3 @@ class BSpline:
                 raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
         else:
             raise ValueError(f"Can't plot in a {NPh}D space.")
-
-def _writePVD(fileName, groups):
-    """
-    Write PVD file
-    Usage: _writePVD("toto", "vtu", groups) 
-    generated file: "toto.pvd" 
-    
-    VTK files must be named as follows:
-    groups={"a": {"ext": "vtu", "npart": 1, "nstep": 2}, "b": {"ext": "vtr", "npart": 2, "nstep": 5}}
-    =>  toto_b_2_5.vtr  (starts from toto_a_0_0.vtu)
-    
-    Parameters
-    ----------
-    fileName : STRING
-        mesh files without numbers and extension
-    groups : DICT of DICT
-        Dict (out) of dict (in) as :
-        - (out) : 
-            * keys are the names of group to plot, 
-            * values are (in) dict, 
-        - (in) : 
-            * "ext" : name of the extention of the group, 
-            * "npart" : number of parts to plot together,
-            * "nstep" : number of time steps.
-
-    """
-    rep,fname=os.path.split(fileName)
-    pvd = xml.dom.minidom.Document()
-    pvd_root = pvd.createElementNS("VTK", "VTKFile")
-    pvd_root.setAttribute("type", "Collection")
-    pvd_root.setAttribute("version", "0.1")
-    pvd_root.setAttribute("byte_order", "LittleEndian")
-    pvd.appendChild(pvd_root)
-    collection = pvd.createElementNS("VTK", "Collection")
-    pvd_root.appendChild(collection)    
-    for name, grp in groups.items():
-        for jp in range(grp["npart"]):
-            for js in range(grp["nstep"]):
-                dataSet = pvd.createElementNS("VTK", "DataSet")
-                dataSet.setAttribute("timestep", str(js))
-                dataSet.setAttribute("group", name)
-                dataSet.setAttribute("part", str(jp))
-                dataSet.setAttribute("file", f"{fname}_{name}_{jp}_{js}.{grp['ext']}")
-                dataSet.setAttribute("name", f"{name}_{jp}")
-                collection.appendChild(dataSet)
-    outFile = open(fileName+".pvd", 'w')
-    pvd.writexml(outFile, newl='\n')
-    print("VTK: "+ fileName +".pvd written")
-    outFile.close()
