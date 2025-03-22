@@ -7,14 +7,15 @@ import numpy as np
 import numba as nb
 from tqdm import tqdm
 
-from .b_spline import BSpline, _writePVD
+from .b_spline import BSpline
 from .b_spline_basis import BSplineBasis
+from .save_utils import writePVD, merge_saves
 # from .save_YETI import Domain, write
 
 # union-find algorithm for connectivity
 @nb.njit(cache=True)
 def find(parent, x):
-    if parent[x] != x:
+    if parent[x]!=x:
         parent[x] = find(parent, parent[x])
     return parent[x]
 
@@ -22,10 +23,10 @@ def find(parent, x):
 def union(parent, rank, x, y):
     rootX = find(parent, x)
     rootY = find(parent, y)
-    if rootX != rootY:
-        if rank[rootX] > rank[rootY]:
+    if rootX!=rootY:
+        if rank[rootX]>rank[rootY]:
             parent[rootY] = rootX
-        elif rank[rootX] < rank[rootY]:
+        elif rank[rootX]<rank[rootY]:
             parent[rootX] = rootY
         else:
             parent[rootY] = rootX
@@ -186,20 +187,6 @@ class MultiPatchBSplineConnectivity:
         """
         unpacked_field = unique_field[..., self.unique_nodes_inds]
         return unpacked_field
-    
-#     def unpack_patch_jacobians(self, field_size):
-#         patch_jacobians = []
-#         ind = 0
-#         for patch_shape in self.shape_by_patch:
-#             nb_row = np.prod(patch_shape)
-#             next_ind = ind + nb_row
-#             row = np.arange(nb_row)
-#             col = self.unique_nodes_inds[ind:next_ind]
-#             data = np.ones(nb_row)
-#             mat = sps.coo_matrix((data, (row, col)), shape=(nb_row, self.nb_unique_nodes))
-#             patch_jacobians.append(sps.block_diag([mat]*field_size))
-#             ind = next_ind
-#         return patch_jacobians
     
     def pack(self, unpacked_field, method='mean'):
         """
@@ -688,7 +675,8 @@ class MultiPatchBSplineConnectivity:
         groups = {"interior": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}, 
                   "elements_borders": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}, 
                   "control_points": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}}
-        _writePVD(os.path.join(path, name), groups)
+        writePVD(os.path.join(path, name), groups)
+        merge_saves(path, name, self.nb_patchs, n_step, ["interior", "elements_borders", "control_points"])
     
 #     def save_YETI(self, splines, separated_ctrl_pts, path, name):
 #         if self.npa==2:
