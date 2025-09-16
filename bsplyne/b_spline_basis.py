@@ -1,4 +1,6 @@
+from typing import Iterable, Union
 import numpy as np
+import numpy.typing as npt
 import numba as nb
 import scipy.sparse as sps
 from scipy.special import comb
@@ -8,91 +10,160 @@ class BSplineBasis:
     """
     BSpline basis in 1D.
 
+    A class representing a one-dimensional B-spline basis with functionality for evaluation, 
+    manipulation and visualization of basis functions. Provides methods for basis function 
+    evaluation, derivatives computation, knot insertion, order elevation, and integration 
+    point generation.
+
     Attributes
     ----------
     p : int
         Degree of the polynomials composing the basis.
-    knot : numpy.array of float
-        Knot vector of the BSpline.
+    knot : np.ndarray[np.floating]
+        Knot vector defining the B-spline basis. Contains non-decreasing sequence 
+        of isoparametric coordinates.
     m : int
-        Last index of the knot vector.
-    n : int
-        Last index of the basis : when evaluated, returns an array of size 
-        `n` + 1.
-    span : tuple of 2 float
-        Interval of definition of the basis.
+        Last index of the knot vector (size - 1).
+    n : int 
+        Last index of the basis functions. When evaluated, returns an array of size 
+        `n + 1`.
+    span : tuple[float, float]
+        Interval of definition of the basis `(knot[p], knot[m - p])`.
 
+    Notes
+    -----
+    The basis functions are defined over the isoparametric space specified by the knot vector.
+    Basis function evaluation and manipulation methods use efficient algorithms based on 
+    Cox-de Boor recursion formulas.
+
+    See Also
+    --------
+    `numpy.ndarray` : Array type used for knot vector storage
+    `scipy.sparse` : Sparse matrix formats used for basis function evaluations
     """
+    p: int
+    knot: np.ndarray[np.floating]
+    m: int
+    n: int
+    span: tuple[float, float]
     
-    def __init__(self, p, knot):
+    def __init__(self, p: int, knot: Iterable[float]):
         """
-        Create a `BSplineBasis` object that can compute its basis, and the 
-        derivatives of these functions.
+        Initialize a B-spline basis with specified degree and knot vector.
 
         Parameters
         ----------
         p : int
-            Degree of the BSpline.
-        knot : numpy.array of float
-            Knot vector of the BSpline.
+            Degree of the B-spline polynomials.
+        knot : Iterable[float]
+            Knot vector defining the B-spline basis. Must be a non-decreasing sequence 
+            of real numbers.
 
         Returns
         -------
-        BSplineBasis : BSplineBasis instance
-            Contains the `BSplineBasis` object created.
+        BSplineBasis
+            The initialized `BSplineBasis` instance.
+
+        Notes
+        -----
+        The knot vector must satisfy these conditions:
+        - Size must be at least `p + 2`
+        - Must be non-decreasing
+        - For non closed B-spline curves, first and last knots must have multiplicity `p + 1`
+
+        The basis functions are defined over the isoparametric space specified by 
+        the knot vector. The span of the basis is [`knot[p]`, `knot[m - p]`], where
+        `m` is the last index of the knot vector.
 
         Examples
         --------
-        Creation of a `BSplineBasis` instance of degree 2 and knot vector 
-        [0, 0, 0, 1, 1, 1] :
-        >>> BSplineBasis(2, np.array([0, 0, 0, 1, 1, 1], dtype='float'))
-
+        Create a quadratic B-spline basis with uniform knot vector:
+        >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
         """
         self.p = p
-        self.knot = knot
-        self.m = knot.size - 1
+        self.knot = np.array(knot, dtype='float')
+        self.m = self.knot.size - 1
         self.n = self.m - self.p - 1
         self.span = (self.knot[self.p], self.knot[self.m - self.p])
     
-    def linspace(self, n_eval_per_elem=10):
+    def linspace(self, n_eval_per_elem: int=10) -> np.ndarray[np.floating]:
         """
-        Generate a set of xi values over the span of the basis.
+        Generate evenly spaced points over the basis span.
+
+        Creates a set of evaluation points by distributing them uniformly within each knot span 
+        (element) of the basis. Points are evenly spaced within elements but spacing may vary 
+        between different elements.
 
         Parameters
         ----------
         n_eval_per_elem : int, optional
-            Number of values per element, by default 10
+            Number of evaluation points per element. By default, 10.
 
         Returns
         -------
-        numpy.array of float
-            Set of xi values over the span.
+        xi : np.ndarray[np.floating]
+            Array of evenly spaced points in isoparametric coordinates over the basis span.
+
+        Notes
+        -----
+        The method:
+        1. Identifies unique knot spans (elements) in the isoparametric space
+        2. Distributes points evenly within each element
+        3. Combines points from all elements into a single array
+        
+        Examples
+        --------
+        >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
+        >>> basis.linspace(5)
+        array([0. , 0.2, 0.4, 0.6, 0.8, 1. ])
         """
         knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=self.span[0], self.knot<=self.span[1])])
-        res = np.linspace(knot_uniq[-2], knot_uniq[-1], n_eval_per_elem + 1)
+        xi = np.linspace(knot_uniq[-2], knot_uniq[-1], n_eval_per_elem + 1)
         for i in range(knot_uniq.size - 2, 0, -1):
-            res = np.append(np.linspace(knot_uniq[i-1], knot_uniq[i], n_eval_per_elem, endpoint=False), 
-                            res)
-        return res
+            xi = np.append(np.linspace(knot_uniq[i-1], knot_uniq[i], n_eval_per_elem, endpoint=False), 
+                            xi)
+        return xi
     
-    def linspace_for_integration(self, n_eval_per_elem=10, bounding_box=None):
+    def linspace_for_integration(
+        self, 
+        n_eval_per_elem: int=10, 
+        bounding_box: Union[tuple[float, float], None]=None
+        ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
         """
-        Generate a set of xi values over the span of the basis, centerered 
-        on intervals of returned lengths.
+        Generate points and weights for numerical integration over knot spans in the 
+        isoparametric space. Points are evenly distributed within each element (knot span),
+        though spacing may vary between different elements.
 
         Parameters
         ----------
         n_eval_per_elem : int, optional
-            Number of values per element, by default 10
-        bounding_box : numpy.array of float, optional
-            Lower and upper bounds, by default `self`.`span`
+            Number of evaluation points per element. By default, 10.
+        bounding_box : Union[tuple[float, float], None], optional
+            Lower and upper bounds for integration. If `None`, uses the span of the basis.
+            By default, None.
 
         Returns
         -------
-        xi : numpy.array of float
-            Set of xi values over the span.
-        dxi : numpy.array of float
-            Integration weight of each point.
+        xi : np.ndarray[np.floating]
+            Array of integration points in isoparametric coordinates, evenly spaced 
+            within each element.
+        dxi : np.ndarray[np.floating]
+            Array of corresponding integration weights, which may vary between elements
+
+        Notes
+        -----
+        The method generates integration points by:
+        1. Identifying unique knot spans (elements) in the isoparametric space
+        2. Distributing points evenly within each element
+        3. Computing appropriate weights for each point based on the element size
+        
+        When `bounding_box` is provided, integration is restricted to that interval,
+        and elements are adjusted accordingly.
+
+        Examples
+        --------
+        >>> basis = BSplineBasis(2, [0, 0, 0, 1, 1, 1])
+        >>> xi, dxi = basis.linspace_for_integration(5)
         """
         if bounding_box is None:
             lower, upper = self.span
@@ -144,24 +215,47 @@ class BSplineBasis:
         dxi = np.hstack(dxi)
         return xi, dxi
     
-    def gauss_legendre_for_integration(self, n_eval_per_elem=None, bounding_box=None):
+    def gauss_legendre_for_integration(
+        self, 
+        n_eval_per_elem: Union[int, None]=None, 
+        bounding_box: Union[tuple[float, float], None]=None
+        ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
         """
-        Generate a set of xi values with their coresponding weight acording to the Gauss Legendre 
-        integration method over a given bounding box.
+        Generate Gauss-Legendre quadrature points and weights for numerical integration over the B-spline basis.
 
         Parameters
         ----------
-        n_eval_per_elem : int, optional
-            Number of values per element, by default `self.p + 1`
-        bounding_box : numpy.array of float, optional
-            Lower and upper bounds, by default `self`.`span`
+        n_eval_per_elem : Union[int, None], optional
+            Number of evaluation points per element. If `None`, takes the value `self.p + 1`.
+            By default, None.
+        bounding_box : Union[tuple[float, float], None], optional
+            Lower and upper bounds for integration. If `None`, uses the span of the basis.
+            By default, None.
 
         Returns
         -------
-        xi : numpy.array of float
-            Set of xi values over the span.
-        dxi : numpy.array of float
-            Integration weight of each point.
+        xi : np.ndarray[np.floating]
+            Array of Gauss-Legendre quadrature points in isoparametric coordinates.
+        dxi : np.ndarray[np.floating]
+            Array of corresponding integration weights.
+
+        Notes
+        -----
+        The method generates integration points and weights by:
+        1. Identifying unique knot spans (elements) in the isoparametric space
+        2. Computing Gauss-Legendre points and weights for each element
+        3. Transforming points and weights to account for element size
+
+        When `bounding_box` is provided, integration is restricted to that interval.
+
+        Examples
+        --------
+        >>> basis = BSplineBasis(2, [0, 0, 0, 1, 1, 1])
+        >>> xi, dxi = basis.gauss_legendre_for_integration(3)
+        >>> xi  # Gauss-Legendre points
+        array([0.11270167, 0.5       , 0.88729833])
+        >>> dxi  # Integration weights
+        array([0.27777778, 0.44444444, 0.27777778])
         """
         if n_eval_per_elem is None:
             n_eval_per_elem = self.p + 1
@@ -177,68 +271,91 @@ class BSplineBasis:
     
     def normalize_knots(self):
         """
-        Maps the knots vector to [0, 1].
+        Normalize the knot vector to the interval [0, 1].
+
+        Maps the knot vector to the unit interval by applying an affine transformation that 
+        preserves the relative spacing between knots. Updates both the knot vector and span 
+        attributes.
+
+        Examples
+        --------
+        >>> basis = BSplineBasis(2, [0., 0., 0., 2., 2., 2.])
+        >>> basis.normalize_knots()
+        >>> basis.knot
+        array([0., 0., 0., 1., 1., 1.])
+        >>> basis.span
+        (0, 1)
         """
         a, b = self.span
         self.knot = (self.knot - a)/(b - a)
         self.span = (0, 1)
     
-    def N(self, XI, k=0):
+    def N(self, XI: np.ndarray[np.floating], k: int=0) -> sps.coo_matrix:
         """
-        Compute the `k`-th derivative of the BSpline basis functions for a set 
-        of values in the parametric space.
+        Compute the k-th derivative of the B-spline basis functions at specified points.
 
         Parameters
         ----------
-        XI : numpy.array of float
-            Values in the parametric space at which the BSpline is evaluated.
+        XI : np.ndarray[np.floating]
+            Points in the isoparametric space at which to evaluate the basis functions.
         k : int, optional
-            `k`-th derivative of the BSpline evaluated. The default is 0.
+            Order of the derivative to compute. By default, 0.
 
         Returns
         -------
-        DN : scipy.sparse.coo_matrix of float
-            Sparse matrix containing the values of the `k`-th derivative of the 
-            BSpline basis functions in the rows for each value of `XI` in the 
-            columns.
+        DN : sps.coo_matrix
+            Sparse matrix containing the k-th derivative values. Each row corresponds to an 
+            evaluation point, each column to a basis function. Shape is (`XI.size`, `n + 1`).
+
+        Notes
+        -----
+        Uses Cox-de Boor recursion formulas to compute basis function derivatives.
+        Returns values in sparse matrix format for efficient storage and computation.
 
         Examples
         --------
-        Evaluation of the BSpline basis on these `XI` values : [0, 0.5, 1]
-        >>> basis = BSplineBasis(2, np.array([0, 0, 0, 1, 1, 1], dtype='float'))
-        >>> basis.N(np.array([0, 0.5, 1], dtype='float')).A
+        >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
+        >>> basis.N([0., 0.5, 1.]).A  # Evaluate basis functions
         array([[1.  , 0.  , 0.  ],
-               [0.25, 0.5 , 0.25],
-               [0.  , 0.  , 1.  ]])
-        
-        Evaluation of the 1st derivative of the BSpline basis on these `XI` 
-        values : [0, 0.5, 1]
-        >>> basis = BSplineBasis(2, np.array([0, 0, 0, 1, 1, 1], dtype='float'))
-        >>> basis.N(np.array([0, 0.5, 1], dtype='float'), k=1).A
+            [0.25, 0.5 , 0.25],
+            [0.  , 0.  , 1.  ]])
+        >>> basis.N([0., 0.5, 1.], k=1).A  # Evaluate first derivatives
         array([[-2.,  2.,  0.],
-               [-1.,  0.,  1.],
-               [ 0., -2.,  2.]])
-
+            [-1.,  0.,  1.],
+            [ 0., -2.,  2.]])
         """
         vals, row, col = _DN(self.p, self.m, self.n, self.knot, XI, k)
         DN = sps.coo_matrix((vals, (row, col)), shape=(XI.size, self.n + 1))
         return DN
     
-    def plotN(self, k=0, show=True):
+    def plotN(self, k: int=0, show: bool=True):
         """
-        Plots the basis functions over the span.
+        Plot the B-spline basis functions or their derivatives over the span.
+
+        Visualizes each basis function N_i(ξ) or its k-th derivative over its support interval 
+        using matplotlib. The plot includes proper LaTeX labels and a legend if there are 10 or 
+        fewer basis functions.
 
         Parameters
         ----------
         k : int, optional
-            `k`-th derivative of the BSpline ploted. The default is 0.
+            Order of derivative to plot. By default, 0 (plots the basis functions themselves).
         show : bool, optional
-            Should the plot be displayed ? The default is True.
+            Whether to display the plot immediately. Can be useful to add more stuff to the plot. 
+            By default, True.
 
-        Returns
-        -------
-        None.
+        Notes
+        -----
+        - Uses adaptive sampling with points only in regions where basis functions are non-zero
+        - Plots each basis function in a different color with LaTeX-formatted labels
+        - Legend is automatically hidden if there are more than 10 basis functions
+        - The x-axis represents the isoparametric coordinate ξ
 
+        Examples
+        --------
+        >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
+        >>> basis.plotN()  # Plot basis functions
+        >>> basis.plotN(k=1)  # Plot first derivatives
         """
         n_eval_per_elem = 500//np.unique(self.knot).size
         for idx in range(self.n+1):
@@ -348,38 +465,40 @@ class BSplineBasis:
         D = sps.coo_matrix((vals, (row, col)), shape=(new_n + 1, self.n + 1))
         return D
     
-    def knotInsertion(self, knots_to_add):
+    def knotInsertion(self, knots_to_add: np.ndarray[np.floating]) -> sps.coo_matrix:
         """
-        Performs the knot insersion process on the `BSplineBasis` instance and 
-        returns the `D` matrix.
+        Insert knots into the B-spline basis and return the transformation matrix.
 
         Parameters
         ----------
-        knots_to_add : numpy.array of float
-            Array of knots to append to the knot vector.
+        knots_to_add : np.ndarray[np.floating]
+            Array of knots to insert into the knot vector.
 
         Returns
         -------
-        D : scipy.sparse.coo_matrix of float
-            The matrix `D` such that :
-            newCtrlPtsCoordinate = `D` @ ancientCtrlPtsCoordinate.
+        D : sps.coo_matrix
+            Transformation matrix such that new control points = `D` @ old control points.
+
+        Notes
+        -----
+        Updates the basis by:
+        - Inserting new knots into the knot vector
+        - Incrementing `m` and `n` by the number of inserted knots
+        - Computing transformation matrix `D` for control points update
 
         Examples
         --------
-        Insert the knots [0.5, 0.5] to the `BSplineBasis` instance 
-        and return the operator to apply on the control points.
         >>> basis = BSplineBasis(2, np.array([0, 0, 0, 1, 1, 1], dtype='float'))
-        >>> basis.knotInsertion(np.array([0.5, 0.5], dtype='float')).A
-        array([[1.  , 0.  , 0.  ],
-               [0.5 , 0.5 , 0.  ],
-               [0.25, 0.5 , 0.25],
-               [0.  , 0.5 , 0.5 ],
-               [0.  , 0.  , 1.  ]])
+        >>> basis.knotInsertion(np.array([0.33, 0.67], dtype='float')).A
+        array([[1.    , 0.    , 0.    ],
+               [0.67  , 0.33  , 0.    ],
+               [0.2211, 0.5578, 0.2211],
+               [0.    , 0.33  , 0.67  ],
+               [0.    , 0.    , 1.    ]])
         
         The knot vector is modified (as well as n and m) :
         >>> basis.knot
-        array([0. , 0. , 0. , 0.5, 0.5, 1. , 1. , 1. ])
-
+        array([0.  , 0.  , 0.  , 0.33, 0.67, 1.  , 1.  , 1.  ])
         """
         k = knots_to_add.size
         new_knot = np.sort(np.concatenate((self.knot, knots_to_add), dtype='float'))
@@ -389,26 +508,32 @@ class BSplineBasis:
         self.knot = new_knot
         return D
     
-    def orderElevation(self, t):
+    def orderElevation(self, t: int) -> sps.coo_matrix:
         """
-        Performs the order elevation algorithm on the basis and return a 
-        linear transformation to apply on the control points.
+        Elevate the polynomial degree of the B-spline basis and return the transformation matrix.
 
         Parameters
         ----------
         t : int
-            New degree of the B-spline basis will be its current degree plus `t`.
+            Amount by which to increase the basis degree. New degree will be current degree plus `t`.
 
         Returns
         -------
-        STD : scipy.sparse.coo_matrix of float
-            The matrix `STD` such that :
-            newCtrlPtsCoordinate = `STD` @ ancientCtrlPtsCoordinate.
+        STD : sps.coo_matrix
+            Transformation matrix for control points such that:
+            new_control_points = `STD` @ old_control_points
+
+        Notes
+        -----
+        The method:
+        1. Separates B-spline into Bézier segments via knot insertion
+        2. Elevates degree of each Bézier segment
+        3. Recombines segments into elevated B-spline via knot removal
+        4. Updates basis degree, knot vector and other attributes
 
         Examples
         --------
-        Elevate the orderof the `BSplineBasis` instance by 1 and return the operator 
-        to apply on the control points.
+        Elevate quadratic basis to cubic:
         >>> basis = BSplineBasis(2, np.array([0, 0, 0, 1, 1, 1], dtype='float'))
         >>> basis.orderElevation(1).A
         array([[1.        , 0.        , 0.        ],
@@ -421,7 +546,6 @@ class BSplineBasis:
         array([0., 0., 0., 0., 1., 1., 1., 1.])
         >>> basis.p
         3
-
         """
         no_dup, counts = np.unique(self.knot, return_counts=True)
         missed = self.p + 1 - counts
@@ -479,7 +603,7 @@ class BSplineBasis:
 
 # %% fast functions for evaluation
 
-@nb.njit(cache=True)
+@nb.njit# (cache=True)
 def _funcNElemOneXi(i, p, knot, xi):
     """
     Evaluate the basis function N_i^p(xi) of the BSpline.
@@ -517,7 +641,7 @@ def _funcNElemOneXi(i, p, knot, xi):
     N_i = rec_p + rec_i
     return N_i
 
-@nb.njit(cache=True)
+@nb.njit# (cache=True)
 def _funcDNElemOneXi(i, p, knot, xi, k):
     """
     Evaluate the `k`-th derivative of the basis function N_i^p(xi) of the 
@@ -568,7 +692,7 @@ def _funcDNElemOneXi(i, p, knot, xi, k):
     N_i = rec_p - rec_i
     return N_i
 
-@nb.njit(cache=True)
+@nb.njit# (cache=True)
 def _findElem(p, m, n, knot, xi):
     """
     Find `i` so that `xi` belongs to 
@@ -613,7 +737,7 @@ def _findElem(p, m, n, knot, xi):
     i -= 1
     return i
 
-@nb.njit(cache=True)#, parallel=True)
+@nb.njit# (cache=True)#, parallel=True)
 def _DN(p, m, n, knot, XI, k):
     """
     Compute the `k`-th derivative of the BSpline basis functions for a set 

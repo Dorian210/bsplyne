@@ -17,7 +17,7 @@ def _scale_matrix(scale_vector):
     S = np.diag(scale_vector)
     return S
 
-def _scale_rotate_translate(pts, scale_vector, axis, angle, translation_vector):
+def scale_rotate_translate(pts, scale_vector, axis, angle, translation_vector):
     S = _scale_matrix(scale_vector)
     R = _rotation_matrix(axis, angle)
     new_pts = (np.tensordot(R@S, pts, 1).T + translation_vector).T
@@ -85,7 +85,7 @@ def new_quarter_circle(center, normal, radius):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return quarter_circle, ctrlPts
 
@@ -117,7 +117,7 @@ def new_circle(center, normal, radius):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return circle, ctrlPts
 
@@ -154,7 +154,7 @@ def new_disk(center, normal, radius):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return disk, ctrlPts
 
@@ -187,7 +187,7 @@ def new_degenerated_disk(center, normal, radius):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return disk, ctrlPts
 
@@ -222,7 +222,7 @@ def new_quarter_pipe(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return quarter_pipe, ctrlPts
 
@@ -263,7 +263,7 @@ def new_pipe(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return pipe, ctrlPts
 
@@ -303,7 +303,7 @@ def new_quarter_cylinder(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return quarter_cylinder, ctrlPts
 
@@ -348,7 +348,7 @@ def new_cylinder(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return cylinder, ctrlPts
 
@@ -385,7 +385,7 @@ def new_degenerated_cylinder(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
     
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return cylinder, ctrlPts
 
@@ -419,7 +419,7 @@ def new_closed_circle(center, normal, radius):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return circle, ctrlPts
 
@@ -448,7 +448,7 @@ def new_closed_disk(center, normal, radius):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return disk, ctrlPts
 
@@ -481,7 +481,7 @@ def new_closed_pipe(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return pipe, ctrlPts
 
@@ -519,7 +519,7 @@ def new_closed_cylinder(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
 
     return cylinder, ctrlPts
 
@@ -585,7 +585,7 @@ def new_quarter_strut(center_front, orientation, radius, length):
 
     translation_vector = np.array(center_front, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
     
     return spline, ctrlPts
 
@@ -608,6 +608,6 @@ def new_cube(center, orientation, side_length):
 
     translation_vector = np.array(center, dtype='float')
 
-    ctrlPts = _scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
+    ctrlPts = scale_rotate_translate(ctrlPts, scale_vector, axis, angle, translation_vector)
     
     return spline, ctrlPts

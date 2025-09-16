@@ -1,6 +1,24 @@
 # %%
 import numpy as np
 import matplotlib.pyplot as plt
+from cycler import cycler
+default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+line_styles = [
+    '-',                          # style simple plein
+    (0, (6, 2)),                  # motif 2 éléments
+    (0, (3, 1)),                  # motif 2 éléments court
+    (0, (1, 1)),                  # motif 2 éléments très court
+    
+    (0, (6, 2, 1, 2)),            # motif 4 éléments
+    (0, (3, 1, 1, 1)),            # motif 4 éléments court
+    (0, (6, 2, 3, 2)),            # motif 4 éléments mixte
+    
+    (0, (6, 2, 1, 2, 1, 2)),      # motif 6 éléments long
+    (0, (3, 1, 1, 1, 1, 1)),      # motif 6 éléments court
+    (0, (6, 2, 3, 2, 1, 2))       # motif 6 éléments mixte
+]
+combined_cycler = cycler(color=default_colors) + cycler(linestyle=line_styles)
+plt.rc('axes', prop_cycle=combined_cycler)
 plt.rcParams.update({'font.size': 10})
 from matplotlib.collections import LineCollection
 from bsplyne import new_quarter_circle

@@ -1,15 +1,18 @@
 # %%
 import os
 from itertools import permutations
+from typing import Iterable, Union, Literal
 from pathos.multiprocessing import ProcessingPool as Pool
 
 import numpy as np
 import numba as nb
+import meshio as io
 from tqdm import tqdm
 
 from .b_spline import BSpline
 from .b_spline_basis import BSplineBasis
-from .save_utils import writePVD, merge_saves
+from .save_utils import writePVD, merge_meshes
+from .parallel_utils import parallel_blocks
 # from .save_YETI import Domain, write
 
 # union-find algorithm for connectivity
@@ -208,7 +211,9 @@ class MultiPatchBSplineConnectivity:
         """
         field_shape = unpacked_field.shape[:-1]
         unique_field = np.zeros((*field_shape, self.nb_unique_nodes), dtype=unpacked_field.dtype)
-        if method=='first':
+        if method=='last':
+            unique_field[..., self.unique_nodes_inds] = unpacked_field
+        elif method=='first':
             unique_field[..., self.unique_nodes_inds[::-1]] = unpacked_field[..., ::-1]
         elif method=='mean':
             np.add.at(unique_field.T, self.unique_nodes_inds, unpacked_field.T)
@@ -310,9 +315,8 @@ class MultiPatchBSplineConnectivity:
             Boolean mask of shape (nb_nodes,) where True indicates a node is duplicated 
             across multiple patches and False indicates it appears only once.
         """
-        unique, inverse, counts = np.unique(self.unique_nodes_inds, return_inverse=True, return_counts=True)
-        duplicate_nodes_mask = np.zeros(self.nb_nodes, dtype='bool')
-        duplicate_nodes_mask[counts[inverse]>1] = True
+        _, inverse, counts = np.unique(self.unique_nodes_inds, return_inverse=True, return_counts=True)
+        duplicate_nodes_mask = counts[inverse]>1
         return duplicate_nodes_mask
     
     def extract_exterior_borders(self, splines):
@@ -556,127 +560,473 @@ class MultiPatchBSplineConnectivity:
         new_connectivity = self.__class__(new_unique_nodes_inds, new_shape_by_patch, new_nb_unique_nodes)
         return new_connectivity, new_splines, new_unique_to_self_unique_connectivity
     
-    def save_block(self, splines, block, separated_ctrl_pts, path, name, n_step, n_eval_per_elem, separated_fields, fiels_on_interior_only):
-        """
-        Process a block of patches, saving the meshes in their corresponding file.
-        Each block has its own progress bar.
-        """
-        with tqdm(total=len(block), desc=f"Saving Block {block[0]}-{block[-1]}") as block_pbar:
-            for i, patch in enumerate(block):
-                groups = {"interior": {"ext": "vtu", "npart": patch, "nstep": n_step}, 
-                        "elements_borders": {"ext": "vtu", "npart": patch, "nstep": n_step}, 
-                        "control_points": {"ext": "vtu", "npart": patch, "nstep": n_step}}
-                splines[i].saveParaview(separated_ctrl_pts[i], 
-                                        path, 
-                                        name, 
-                                        n_step=n_step, 
-                                        n_eval_per_elem=n_eval_per_elem, 
-                                        fields=separated_fields[i], 
-                                        groups=groups, 
-                                        make_pvd=False, 
-                                        verbose=False, 
-                                        fiels_on_interior_only=fiels_on_interior_only)
-                block_pbar.update(1)
-    
-    def save_paraview(self, splines, separated_ctrl_pts, path, name, n_step=1, n_eval_per_elem=10, unique_fields={}, separated_fields=None, verbose=True, fields_on_interior_only=True):
-        """
-        Save the multipatch B-spline data to Paraview format using parallel processing.
-
-        Parameters
-        ----------
-        splines : list[BSpline]
-            Array of B-spline patches to save
-        separated_ctrl_pts : list[numpy.ndarray]
-            Control points for each patch in separated representation
-        path : str
-            Directory path where files will be saved
-        name : str
-            Base name for the saved files
-        n_step : int, optional
-            Number of time steps, by default 1
-        n_eval_per_elem : int or list[int], optional
-            Number of evaluation points per element, by default 10
-        unique_fields : dict, optional
-            Fields in unique representation to save, by default {}
-        separated_fields : list[dict], optional
-            Fields in separated representation to save, by default None
-        verbose : bool, optional
-            Whether to show progress bars, by default True
-        fields_on_interior_only : bool, optional
-            Whether to save fields on interior only, by default True
-
-        Raises
-        ------
-        NotImplementedError
-            If a callable is passed in unique_fields
-        ValueError
-            If pool is not running and cannot be restarted
-        """
+    def make_control_poly_meshes(
+        self, 
+        splines: Iterable[BSpline], 
+        separated_ctrl_pts: Iterable[np.ndarray[np.floating]], 
+        n_eval_per_elem: Union[Iterable[int], int]=10, 
+        n_step: int=1, 
+        unique_fields: dict={}, 
+        separated_fields: Union[dict, None]=None, 
+        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]]=None, 
+        paraview_sizes: dict={}
+        ) -> list[io.Mesh]:
+        
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.npa
         
         if separated_fields is None:
             separated_fields = [{} for _ in range(self.nb_patchs)]
         
+        if XI_list is None:
+            XI_list = [None]*self.nb_patchs
+        
         for key, value in unique_fields.items():
             if callable(value):
                 raise NotImplementedError("To handle functions as fields, use separated_fields !")
             else:
+                if value.shape[-1]!=self.nb_unique_nodes:
+                    raise ValueError(f"Field {key} of unique_fields is in a wrong format (not unique format).")
                 separated_value = self.separate(self.unpack(value))
                 for patch in range(self.nb_patchs):
                     separated_fields[patch][key] = separated_value[patch]
         
-        num_blocks = min(int(os.cpu_count()), self.nb_patchs)
-        patch_indices = patch_indices = [block for block in np.array_split(range(self.nb_patchs), num_blocks) if block.size!=0]
-        pool = Pool(num_blocks)
-
-        try:
-            success = False
-            while not success:
-                try:
-                    if verbose:
-                        list(tqdm(
-                            pool.uimap(
-                                self.save_block, 
-                                [splines[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
-                                patch_indices,
-                                [separated_ctrl_pts[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
-                                [path]*num_blocks, 
-                                [name]*num_blocks, 
-                                [n_step]*num_blocks, 
-                                [n_eval_per_elem]*num_blocks, 
-                                [separated_fields[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
-                                [fields_on_interior_only]*num_blocks),
-                            total=num_blocks,
-                            desc="Saving Blocks", 
-                            position=1,
-                        ))
-                    else:
-                        pool.map(self.save_block, 
-                                [splines[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
-                                patch_indices,
-                                [separated_ctrl_pts[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
-                                [path]*num_blocks, 
-                                [name]*num_blocks, 
-                                [n_step]*num_blocks, 
-                                [n_eval_per_elem]*num_blocks, 
-                                [separated_fields[indices[0]:(indices[-1] + 1)] for indices in patch_indices], 
-                                [fields_on_interior_only]*num_blocks)
-                    success = True  # Exit loop if no exception occurs
-                except ValueError as e:
-                    if str(e) == "Pool not running":
-                        pool.restart()  # Restart the pool and retry
-                    else:
-                        raise  # Re-raise any other exception
-        finally:
-            pool.close()
-            pool.join()
+        step_meshes = np.empty((self.nb_patchs, n_step), dtype=object)
+        for patch in range(self.nb_patchs):
+            step_meshes[patch] = splines[patch].make_control_poly_meshes(separated_ctrl_pts[patch], 
+                                                                         n_eval_per_elem=n_eval_per_elem, 
+                                                                         n_step=n_step, 
+                                                                         fields=separated_fields[patch], 
+                                                                         XI=XI_list[patch], 
+                                                                         paraview_sizes=paraview_sizes)
+            for mesh in step_meshes[patch]:
+                mesh.point_data["patch_id"] = np.full(mesh.points.shape[0], patch, dtype=int)
+        meshes = []
+        for time_step_meshes in step_meshes.T:
+            meshes.append(merge_meshes(time_step_meshes))
+        return meshes
+    
+    def make_elem_separator_meshes(
+        self, 
+        splines: Iterable[BSpline], 
+        separated_ctrl_pts: Iterable[np.ndarray[np.floating]], 
+        n_eval_per_elem: Union[Iterable[int], int]=10, 
+        n_step: int=1, 
+        unique_fields: dict={}, 
+        separated_fields: Union[dict, None]=None, 
+        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]]=None, 
+        paraview_sizes: dict={}, 
+        parallel: bool=True, 
+        verbose: bool=True
+        ) -> list[io.Mesh]:
         
-        groups = {"interior": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}, 
-                  "elements_borders": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}, 
-                  "control_points": {"ext": "vtu", "npart": self.nb_patchs, "nstep": n_step}}
-        writePVD(os.path.join(path, name), groups)
-        merge_saves(path, name, self.nb_patchs, n_step, ["interior", "elements_borders", "control_points"])
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem]*self.npa
+        
+        if separated_fields is None:
+            separated_fields = [{} for _ in range(self.nb_patchs)]
+        
+        if XI_list is None:
+            XI_list = [None]*self.nb_patchs
+        
+        for key, value in unique_fields.items():
+            if callable(value):
+                raise NotImplementedError("To handle functions as fields, use separated_fields !")
+            else:
+                if value.shape[-1]!=self.nb_unique_nodes:
+                    raise ValueError(f"Field {key} of unique_fields is in a wrong format (not unique format).")
+                separated_value = self.separate(self.unpack(value))
+                for patch in range(self.nb_patchs):
+                    separated_fields[patch][key] = separated_value[patch]
+        
+        funcs = [splines[i].make_elem_separator_meshes for i in range(self.nb_patchs)]
+        all_args = [(separated_ctrl_pts[i], n_eval_per_elem, n_step, separated_fields[i], XI_list[i], paraview_sizes) for i in range(self.nb_patchs)]
+        
+        elem_separator_meshes = parallel_blocks(funcs, all_args, verbose=verbose, pbar_title="Making elements separators meshes", disable_parallel=not parallel)
+        
+        for patch, step_meshes in enumerate(elem_separator_meshes):
+            for timestep, mesh in enumerate(step_meshes):
+                mesh.point_data["patch_id"] = np.full(mesh.points.shape[0], patch, dtype=int)
+        meshes = []
+        for timestep, patch_meshes in enumerate(zip(*elem_separator_meshes)):
+            meshes.append(merge_meshes(patch_meshes))
+        
+        return meshes
+    
+    def make_elements_interior_meshes(self, 
+                                      splines: Iterable[BSpline], 
+                                      separated_ctrl_pts: Iterable[np.ndarray[np.floating]], 
+                                      n_eval_per_elem: Union[Iterable[int], int]=10, 
+                                      n_step: int=1, 
+                                      unique_fields: dict={}, 
+                                      separated_fields: Union[dict, None]=None, 
+                                      XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]]=None, 
+                                      parallel: bool=True, 
+                                      verbose: bool=True) -> list[io.Mesh]:
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem]*self.npa
+        
+        if separated_fields is None:
+            separated_fields = [{} for _ in range(self.nb_patchs)]
+        
+        if XI_list is None:
+            XI_list = [None]*self.nb_patchs
+        
+        for key, value in unique_fields.items():
+            if callable(value):
+                raise NotImplementedError("To handle functions as fields, use separated_fields !")
+            else:
+                if value.shape[-1]!=self.nb_unique_nodes:
+                    raise ValueError(f"Field {key} of unique_fields is in a wrong format (not unique format).")
+                separated_value = self.separate(self.unpack(value))
+                for patch in range(self.nb_patchs):
+                    separated_fields[patch][key] = separated_value[patch]
+        
+        funcs = [splines[i].make_elements_interior_meshes for i in range(self.nb_patchs)]
+        all_args = [(separated_ctrl_pts[i], n_eval_per_elem, n_step, separated_fields[i], XI_list[i]) for i in range(self.nb_patchs)]
+        
+        interior_meshes = parallel_blocks(funcs, all_args, verbose=verbose, pbar_title="Making interior meshes", disable_parallel=not parallel)
+        
+        for patch, step_meshes in enumerate(interior_meshes):
+            for timestep, mesh in enumerate(step_meshes):
+                mesh.point_data["patch_id"] = np.full(mesh.points.shape[0], patch, dtype=int)
+        meshes = []
+        for timestep, patch_meshes in enumerate(zip(*interior_meshes)):
+            meshes.append(merge_meshes(patch_meshes))
+        
+        return meshes
+    
+    def make_all_meshes(
+        self, 
+        splines: Iterable[BSpline], 
+        separated_ctrl_pts: Iterable[np.ndarray[np.floating]], 
+        n_step: int=1, 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        unique_fields: dict={}, 
+        separated_fields: Union[list[dict], None]=None, 
+        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]]=None, 
+        verbose: bool=True, 
+        fields_on_interior_only: Union[bool, Literal['auto'], list[str]]='auto'
+        ) -> tuple[list[io.Mesh], list[io.Mesh], list[io.Mesh]]:
+        """
+        Generate all mesh representations (interior, element borders, and control points) for a multipatch B-spline geometry.
+
+        This method creates three types of meshes for visualization or analysis:
+        - The interior mesh representing the B-spline surface or volume.
+        - The element separator mesh showing the borders between elements.
+        - The control polygon mesh showing the control structure.
+
+        Parameters
+        ----------
+        splines : Iterable[BSpline]
+            List of B-spline patches to process.
+        separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+            Control points for each patch in separated representation.
+        n_step : int, optional
+            Number of time steps to generate. By default, 1.
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for each isoparametric dimension.
+            If an `int` is provided, the same number is used for all dimensions.
+            If an `Iterable` is provided, each value corresponds to a different dimension.
+            By default, 10.
+        unique_fields : dict, optional
+            Fields in unique representation to visualize. By default, `{}`.
+            Keys are field names, values are arrays (not callables nor FE fields).
+        separated_fields : Union[list[dict], None], optional
+            Fields to visualize at each time step.
+            List of `self.nb_patchs` dictionaries (one per patch) of format:
+            {
+                "field_name": `field_value`
+            }
+            where `field_value` can be either:
+            1. A `np.ndarray` with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`)
+            2. A `np.ndarray` with shape (`n_step`, `field_size`, `*grid_shape`)
+            3. A function that computes field values (`np.ndarray[np.floating]`) at given points from the `BSpline` instance and `XI`.
+            By default, None.
+        XI_list : Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]], optional
+            Parametric coordinates at which to evaluate the B-spline patches and fields.
+            If not `None`, overrides the `n_eval_per_elem` parameter.
+            If `None`, regular grids are generated according to `n_eval_per_elem`.
+            By default, None.
+        verbose : bool, optional
+            Whether to print progress information. By default, True.
+        fiels_on_interior_only: Union[bool, Literal['auto'], list[str]], optionnal
+            Whether to include fields only on the interior mesh (`True`), on all meshes (`False`),
+            or on specified field names.
+            If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'` 
+            are included on all meshes while others are only included on the interior mesh.
+            By default, 'auto'.
+
+        Returns
+        -------
+        tuple[list[io.Mesh], list[io.Mesh], list[io.Mesh]]
+            Tuple containing three lists of `io.Mesh` objects:
+            - Interior meshes for each time step.
+            - Element separator meshes for each time step.
+            - Control polygon meshes for each time step.
+
+        Raises
+        ------
+        NotImplementedError
+            If a callable is passed in `unique_fields`.
+        ValueError
+            If a field in `unique_fields` does not have the correct shape.
+
+        Notes
+        -----
+        - The isoparametric space refers to the parametric space of the B-splines.
+        - Fields can be visualized as scalars or vectors.
+        - Supports time-dependent visualization through `n_step`.
+        - Fields in `unique_fields` must be arrays; to use callables, use `separated_fields`.
+
+        Examples
+        --------
+        >>> interior, borders, control = connectivity.make_all_meshes(splines, separated_ctrl_pts)
+        """
+        
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem]*self.npa
+        
+        if separated_fields is None:
+            separated_fields = [{} for _ in range(self.nb_patchs)]
+        
+        if XI_list is None:
+            XI_list = [None]*self.nb_patchs
+        
+        for key, value in unique_fields.items():
+            if callable(value):
+                raise NotImplementedError("To handle functions as fields, use separated_fields !")
+            else:
+                if value.shape[-1]!=self.nb_unique_nodes:
+                    raise ValueError(f"Field {key} of unique_fields is in a wrong format (not unique format).")
+                separated_value = self.separate(self.unpack(value))
+                for patch in range(self.nb_patchs):
+                    separated_fields[patch][key] = separated_value[patch]
+        
+        paraview_sizes = {}
+        fields = separated_fields[0]
+        if fields_on_interior_only is True:
+            for key, value in fields.items():
+                if callable(value):
+                    paraview_sizes[key] = value(splines[0], np.zeros((splines[0].NPa, 1))).shape[2]
+                else:
+                    paraview_sizes[key] = value.shape[1]
+        elif fields_on_interior_only is False:
+            pass
+        elif fields_on_interior_only=='auto':
+            for key, value in fields.items():
+                if key not in ['u', 'U', 'displacement', 'displ']:
+                    if callable(value):
+                        paraview_sizes[key] = value(splines[0], np.zeros((splines[0].NPa, 1))).shape[2]
+                    else:
+                        paraview_sizes[key] = value.shape[1]
+        else:
+            for key in fields_on_interior_only:
+                value = fields[key]
+                if callable(value):
+                    paraview_sizes[key] = value(splines[0], np.zeros((splines[0].NPa, 1))).shape[2]
+                else:
+                    paraview_sizes[key] = value.shape[1]
+                
+        
+        elem_interior_meshes = self.make_elements_interior_meshes(splines, separated_ctrl_pts, n_eval_per_elem, n_step, separated_fields=separated_fields, XI_list=XI_list, verbose=verbose)
+        if verbose:
+            print("interior done")
+
+        elem_separator_meshes = self.make_elem_separator_meshes(splines, separated_ctrl_pts, n_eval_per_elem, n_step, separated_fields=separated_fields, XI_list=XI_list, paraview_sizes=paraview_sizes)
+        if verbose:
+            print("elements borders done")
+
+        control_poly_meshes = self.make_control_poly_meshes(splines, separated_ctrl_pts, n_eval_per_elem, n_step, separated_fields=separated_fields, XI_list=XI_list, paraview_sizes=paraview_sizes)
+        if verbose:
+            print("control points done")
+        
+        return elem_interior_meshes, elem_separator_meshes, control_poly_meshes
+        
+    def save_paraview(
+        self, 
+        splines: Iterable[BSpline], 
+        separated_ctrl_pts: Iterable[np.ndarray[np.floating]], 
+        path: str, 
+        name: str, 
+        n_step: int=1, 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        unique_fields: dict={}, 
+        separated_fields: Union[list[dict], None]=None, 
+        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]]=None, 
+        groups: Union[dict[str, dict[str, Union[str, int]]], None]=None, 
+        make_pvd: bool=True, 
+        verbose: bool=True, 
+        fields_on_interior_only: Union[bool, Literal['auto'], list[str]]='auto'):
+        """
+        Save multipatch B-spline visualization data as Paraview files.
+
+        This method generates three types of visualization files for a multipatch B-spline geometry:
+        - Interior mesh showing the B-spline surface/volume
+        - Element borders showing the mesh structure
+        - Control points mesh showing the control structure
+
+        All files are saved in VTU format, with an optional PVD file to group them for Paraview.
+
+        Parameters
+        ----------
+        splines : Iterable[BSpline]
+            List of B-spline patches to save.
+        separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+            Control points for each patch in separated representation.
+        path : str
+            Directory path where the files will be saved.
+        name : str
+            Base name for the output files.
+        n_step : int, optional
+            Number of time steps to save. By default, 1.
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for each isoparametric dimension.
+            If an `int` is provided, the same number is used for all dimensions.
+            If an `Iterable` is provided, each value corresponds to a different dimension.
+            By default, 10.
+        unique_fields : dict, optional
+            Fields in unique representation to save. By default, `{}`.
+            Keys are field names, values are arrays (not callables nor FE fields).
+        separated_fields : Union[list[dict], None], optional
+            Fields to visualize at each time step.
+            List of `self.nb_patchs` dictionaries (one per patch) of format:
+            {
+                "field_name": `field_value`
+            }
+            where `field_value` can be either:
+            
+            1. A numpy array with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`) where:
+            - `n_step`: Number of time steps
+            - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
+            - `self.shape_by_patch[patch]`: Same shape as the patch's control points grid (excluding `NPh`)
+            
+            2. A numpy array with shape (`n_step`, `field_size`, `*grid_shape`) where:
+            - `n_step`: Number of time steps
+            - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
+            - `*grid_shape`: Shape of the evaluation grid (number of points along each isoparametric axis)
+            
+            3. A function that computes field values (`np.ndarray[np.floating]`) at given 
+            points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation 
+            points for each dimension (`tuple[np.ndarray[np.floating], ...]`).
+            The result should be an array of shape (`n_step`, `n_points`, `field_size`) where:
+            - `n_step`: Number of time steps
+            - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
+            - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
+            
+            By default, None.
+        XI_list : Iterable[tuple[np.ndarray[np.floating], ...]], optional
+            Parametric coordinates at which to evaluate the B-spline patches and fields.
+            If not `None`, overrides the `n_eval_per_elem` parameter.
+            If `None`, regular grids are generated according to `n_eval_per_elem`.
+        groups : Union[dict[str, dict[str, Union[str, int]]], None], optional
+            Nested dictionary specifying file groups for PVD organization. Format:
+            {
+                "group_name": {
+                    "ext": str,     # File extension (e.g., "vtu")
+                    "npart": int,   # Number of parts in the group
+                    "nstep": int    # Number of timesteps
+                }
+            }
+            If provided, existing groups are updated; if `None`, groups are created automatically.
+            By default, `None`.
+        make_pvd : bool, optional
+            Whether to create a PVD file grouping all VTU files. By default, `True`.
+        verbose : bool, optional
+            Whether to print progress information. By default, `True`.
+        fields_on_interior_only: Union[bool, Literal['auto'], list[str]], optionnal
+            Whether to include fields only on the interior mesh (`True`), on all meshes (`False`),
+            or on specified field names.
+            If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'` 
+            are included on all meshes while others are only included on the interior mesh.
+            By default, 'auto'.
+
+        Returns
+        -------
+        groups : dict[str, dict[str, Union[str, int]]]
+            Updated groups dictionary with information about saved files.
+
+        Raises
+        ------
+        NotImplementedError
+            If a callable is passed in `unique_fields`.
+        ValueError
+            If the multiprocessing pool is not running and cannot be restarted.
+
+        Notes
+        -----
+        - Creates three types of VTU files for each time step:
+            - {name}_interior_{part}_{step}.vtu
+            - {name}_elements_borders_{part}_{step}.vtu
+            - {name}_control_points_{part}_{step}.vtu
+        - If `make_pvd=True`, creates a PVD file named {name}.pvd.
+        - Fields can be visualized as scalars or vectors in Paraview.
+        - The method supports time-dependent visualization through `n_step`.
+        - Fields in `unique_fields` must be arrays; to use callables, use `separated_fields`.
+
+        Examples
+        --------
+        Save a multipatch B-spline visualization:
+        >>> connectivity.save_paraview(splines, separated_ctrl_pts, "./output", "multipatch")
+
+        Save with a custom separated field on a 2 patches multipatch:
+        >>> fields = [{"temperature": np.random.rand(1, 4, 4)}, {"temperature": np.random.rand(1, 7, 3)}]
+        >>> connectivity.save_paraview(splines, separated_ctrl_pts, "./output", "multipatch", separated_fields=fields)
+        """
+        
+        if groups is None:
+            groups = {}
+        
+        interior = "interior"
+        if interior in groups:
+            groups[interior]["npart"] += 1
+        else:
+            groups[interior] = {"ext": "vtu", "npart": 1, "nstep": n_step}
+        elements_borders = "elements_borders"
+        if elements_borders in groups:
+            groups[elements_borders]["npart"] += 1
+        else:
+            groups[elements_borders] = {"ext": "vtu", "npart": 1, "nstep": n_step}
+        control_points = "control_points"
+        if control_points in groups:
+            groups[control_points]["npart"] += 1
+        else:
+            groups[control_points] = {"ext": "vtu", "npart": 1, "nstep": n_step}
+        
+        elem_interior_meshes, elem_separator_meshes, control_poly_meshes = self.make_all_meshes(
+            splines, 
+            separated_ctrl_pts, 
+            n_step, 
+            n_eval_per_elem, 
+            unique_fields, 
+            separated_fields, 
+            XI_list, 
+            verbose, 
+            fields_on_interior_only
+        )
+        
+        prefix = os.path.join(path, f"{name}_{interior}_{groups[interior]['npart'] - 1}")
+        for time_step, mesh in enumerate(elem_interior_meshes):
+            mesh.write(f"{prefix}_{time_step}.vtu")
+        if verbose:
+            print(interior, "saved")
+
+        prefix = os.path.join(path, f"{name}_{elements_borders}_{groups[elements_borders]['npart'] - 1}")
+        for time_step, mesh in enumerate(elem_separator_meshes):
+            mesh.write(f"{prefix}_{time_step}.vtu")
+        if verbose:
+            print(elements_borders, "saved")
+
+        prefix = os.path.join(path, f"{name}_{control_points}_{groups[control_points]['npart'] - 1}")
+        for time_step, mesh in enumerate(control_poly_meshes):
+            mesh.write(f"{prefix}_{time_step}.vtu")
+        if verbose:
+            print(control_points, "saved")
+        
+        if make_pvd:
+            writePVD(os.path.join(path, name), groups)
+        
+        return groups
     
 #     def save_YETI(self, splines, separated_ctrl_pts, path, name):
 #         if self.npa==2:
