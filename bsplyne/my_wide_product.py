@@ -3,7 +3,7 @@ import scipy.sparse as sps
 import numba as nb
 
 @nb.njit(cache=True)
-def wide_product_max_nnz(a_indptr: np.ndarray, b_indptr: np.ndarray, height: int) -> int:
+def _wide_product_max_nnz(a_indptr: np.ndarray, b_indptr: np.ndarray, height: int) -> int:
     """
     Compute the maximum number of nonzeros in the result.
     
@@ -29,7 +29,7 @@ def wide_product_max_nnz(a_indptr: np.ndarray, b_indptr: np.ndarray, height: int
     return max_nnz
 
 @nb.njit(cache=True)
-def wide_product_row(a_data: np.ndarray, a_indices: np.ndarray,
+def _wide_product_row(a_data: np.ndarray, a_indices: np.ndarray,
                      b_data: np.ndarray, b_indices: np.ndarray,
                      b_width: int,
                      out_data: np.ndarray, out_indices: np.ndarray) -> int:
@@ -71,7 +71,7 @@ def wide_product_row(a_data: np.ndarray, a_indices: np.ndarray,
     return off
 
 @nb.njit(cache=True)
-def wide_product_numba(height: int,
+def _wide_product_numba(height: int,
                        a_data: np.ndarray, a_indices: np.ndarray, a_indptr: np.ndarray, a_width: int,
                        b_data: np.ndarray, b_indices: np.ndarray, b_indptr: np.ndarray, b_width: int):
     """
@@ -112,7 +112,7 @@ def wide_product_numba(height: int,
     total_nnz : int
         Total number of nonzero entries computed.
     """
-    max_nnz = wide_product_max_nnz(a_indptr, b_indptr, height)
+    max_nnz = _wide_product_max_nnz(a_indptr, b_indptr, height)
     out_data = np.empty(max_nnz, dtype=a_data.dtype)
     out_indices = np.empty(max_nnz, dtype=a_indices.dtype)
     out_indptr = np.empty(height + 1, dtype=a_indptr.dtype)
@@ -125,7 +125,7 @@ def wide_product_numba(height: int,
         b_start = b_indptr[i]
         b_end = b_indptr[i + 1]
         
-        row_nnz = wide_product_row(a_data[a_start:a_end], a_indices[a_start:a_end],
+        row_nnz = _wide_product_row(a_data[a_start:a_end], a_indices[a_start:a_end],
                                      b_data[b_start:b_end], b_indices[b_start:b_end],
                                      b_width,
                                      out_data[off:], out_indices[off:])
@@ -165,7 +165,7 @@ def my_wide_product(A: sps.spmatrix, B: sps.spmatrix) -> sps.csr_matrix:
     a_width = A.shape[1]
     b_width = B.shape[1]
     
-    out_data, out_indices, out_indptr, total_nnz = wide_product_numba(
+    out_data, out_indices, out_indptr, total_nnz = _wide_product_numba(
         height,
         A.data, A.indices, A.indptr, a_width,
         B.data, B.indices, B.indptr, b_width

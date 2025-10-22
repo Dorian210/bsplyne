@@ -14,16 +14,16 @@ from .parallel_utils import parallel_blocks
 # from .save_YETI import Domain, write
 
 # union-find algorithm for connectivity
-@nb.njit(cache=True)
-def find(parent, x):
+@nb.njit(nb.int32(nb.int32[:], nb.int32), cache=True)
+def _find(parent, x):
     if parent[x]!=x:
-        parent[x] = find(parent, parent[x])
+        parent[x] = _find(parent, parent[x])
     return parent[x]
 
-@nb.njit(cache=True)
-def union(parent, rank, x, y):
-    rootX = find(parent, x)
-    rootY = find(parent, y)
+@nb.njit(nb.void(nb.int32[:], nb.int32[:], nb.int32, nb.int32), cache=True)
+def _union(parent, rank, x, y):
+    rootX = _find(parent, x)
+    rootY = _find(parent, y)
     if rootX!=rootY:
         if rank[rootX]>rank[rootY]:
             parent[rootY] = rootX
@@ -33,15 +33,15 @@ def union(parent, rank, x, y):
             parent[rootY] = rootX
             rank[rootX] += 1
 
-@nb.njit(cache=True)
-def get_unique_nodes_inds(nodes_couples, nb_nodes):
-    parent = np.arange(nb_nodes)
+@nb.njit(nb.int32[:](nb.int32[:, :], nb.int64), cache=True)
+def _get_unique_nodes_inds(nodes_couples, nb_nodes):
+    parent = np.arange(nb_nodes, dtype=np.int32)
     rank = np.zeros(nb_nodes, dtype=np.int32)
     for a, b in nodes_couples:
-        union(parent, rank, a, b)
+        _union(parent, rank, a, b)
     unique_nodes_inds = np.empty(nb_nodes, dtype=np.int32)
     for i in range(nb_nodes):
-        unique_nodes_inds[i] = find(parent, i)
+        unique_nodes_inds[i] = _find(parent, i)
     return unique_nodes_inds
 
 class MultiPatchBSplineConnectivity:
@@ -113,7 +113,7 @@ class MultiPatchBSplineConnectivity:
             Instance of `MultiPatchBSplineConnectivity` created.
         """
         nb_nodes = np.sum(np.prod(shape_by_patch, axis=1))
-        unique_nodes_inds = get_unique_nodes_inds(nodes_couples, nb_nodes)
+        unique_nodes_inds = _get_unique_nodes_inds(nodes_couples.astype(np.int32), np.int64(nb_nodes))
         different_unique_nodes_inds, inverse = np.unique(unique_nodes_inds, return_inverse=True)
         unique_nodes_inds -= np.cumsum(np.diff(np.concatenate(([-1], different_unique_nodes_inds))) - 1)[inverse]
         nb_unique_nodes = np.unique(unique_nodes_inds).size

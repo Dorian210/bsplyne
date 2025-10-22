@@ -6,8 +6,6 @@
 
 **bsplyne** is a Python library for working with N-dimensional B-splines. It implements the Cox-de Boor algorithm for basis evaluation, order elevation, knot insertion, and provides a connectivity class for multi-patch structures. Additionally, it includes visualization tools with export capabilities to Paraview.
 
-> **Note:** This library is not yet available on PyPI. To install, please clone the repository and install it manually.
-
 ## Installation
 
 Since **bsplyne** is not yet on PyPI, you can install it locally as follows:
