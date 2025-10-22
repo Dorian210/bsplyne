@@ -603,7 +603,7 @@ class BSplineBasis:
 
 # %% fast functions for evaluation
 
-@nb.njit# (cache=True)
+@nb.njit(nb.float64(nb.int64, nb.int64, nb.float64[:], nb.float64), cache=True)
 def _funcNElemOneXi(i, p, knot, xi):
     """
     Evaluate the basis function N_i^p(xi) of the BSpline.
@@ -641,7 +641,7 @@ def _funcNElemOneXi(i, p, knot, xi):
     N_i = rec_p + rec_i
     return N_i
 
-@nb.njit# (cache=True)
+@nb.njit(nb.float64(nb.int64, nb.int64, nb.float64[:], nb.float64, nb.int64), cache=True)
 def _funcDNElemOneXi(i, p, knot, xi, k):
     """
     Evaluate the `k`-th derivative of the basis function N_i^p(xi) of the 
@@ -692,7 +692,7 @@ def _funcDNElemOneXi(i, p, knot, xi, k):
     N_i = rec_p - rec_i
     return N_i
 
-@nb.njit# (cache=True)
+@nb.njit(nb.int64(nb.int64, nb.int64, nb.int64, nb.float64[:], nb.float64), cache=True)
 def _findElem(p, m, n, knot, xi):
     """
     Find `i` so that `xi` belongs to 
@@ -737,7 +737,8 @@ def _findElem(p, m, n, knot, xi):
     i -= 1
     return i
 
-@nb.njit# (cache=True)#, parallel=True)
+@nb.njit(nb.types.UniTuple.from_types((nb.float64[:], nb.int64[:], nb.int64[:]))(nb.int64, nb.int64, nb.int64, nb.float64[:], nb.float64[:], nb.int64), 
+         cache=True)
 def _DN(p, m, n, knot, XI, k):
     """
     Compute the `k`-th derivative of the BSpline basis functions for a set 

@@ -2,12 +2,10 @@
 import os
 from itertools import permutations
 from typing import Iterable, Union, Literal
-from pathos.multiprocessing import ProcessingPool as Pool
 
 import numpy as np
 import numba as nb
 import meshio as io
-from tqdm import tqdm
 
 from .b_spline import BSpline
 from .b_spline_basis import BSplineBasis

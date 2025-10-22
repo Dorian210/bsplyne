@@ -26,7 +26,6 @@ Make sure you have the following dependencies installed:
 - `matplotlib`
 - `meshio`
 - `tqdm`
-- `pathos`
 
 ## Main Modules
 
