@@ -1,4 +1,5 @@
 from typing import Iterable, Union
+import json, pickle
 import numpy as np
 import numpy.typing as npt
 import numba as nb
@@ -226,7 +227,7 @@ class BSplineBasis:
         Parameters
         ----------
         n_eval_per_elem : Union[int, None], optional
-            Number of evaluation points per element. If `None`, takes the value `self.p + 1`.
+            Number of evaluation points per element. If `None`, takes the value `self.p//2 + 1`.
             By default, None.
         bounding_box : Union[tuple[float, float], None], optional
             Lower and upper bounds for integration. If `None`, uses the span of the basis.
@@ -258,7 +259,7 @@ class BSplineBasis:
         array([0.27777778, 0.44444444, 0.27777778])
         """
         if n_eval_per_elem is None:
-            n_eval_per_elem = self.p + 1
+            n_eval_per_elem = self.p//2 + 1
         if bounding_box is None:
             lower, upper = self.span
         else:
@@ -324,9 +325,68 @@ class BSplineBasis:
             [-1.,  0.,  1.],
             [ 0., -2.,  2.]])
         """
-        vals, row, col = _DN(self.p, self.m, self.n, self.knot, XI, k)
+        vals, row, col = _DN(self.p, self.m, self.n, self.knot, np.asarray(XI, dtype=np.float64), k)
         DN = sps.coo_matrix((vals, (row, col)), shape=(XI.size, self.n + 1))
         return DN
+    
+    def to_dict(self) -> dict:
+        """
+        Returns a dictionary representation of the BSplineBasis object.
+        """
+        return {
+            'p': self.p, 
+            'knot': self.knot.tolist(), 
+            'm': self.m, 
+            'n': self.n, 
+            'span': self.span
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "BSplineBasis":
+        """
+        Creates a BSplineBasis object from a dictionary representation.
+        """
+        this = cls(data['p'], data['knot'])
+        this.m = data['m']
+        this.n = data['n']
+        this.span = data['span']
+        return this
+    
+    def save(self, filepath: str) -> None:
+        """
+        Save the BSplineBasis object to a file.
+        Control points are optional.
+        Supported extensions: json, pkl
+        """
+        data = self.to_dict()
+        ext = filepath.split('.')[-1]
+        if ext == 'json':
+            with open(filepath, 'w') as f:
+                json.dump(data, f, indent=2)
+        elif ext == 'pkl':
+            with open(filepath, 'wb') as f:
+                pickle.dump(data, f)
+        else:
+            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+
+    @classmethod
+    def load(cls, filepath: str) -> "BSplineBasis":
+        """
+        Load a BSplineBasis object from a file.
+        May return control points if the file contains them.
+        Supported extensions: json, pkl
+        """
+        ext = filepath.split('.')[-1]
+        if ext == 'json':
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+        elif ext == 'pkl':
+            with open(filepath, 'rb') as f:
+                data = pickle.load(f)
+        else:
+            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+        this = cls.from_dict(data)
+        return this
     
     def plotN(self, k: int=0, show: bool=True):
         """
@@ -373,8 +433,21 @@ class BSplineBasis:
             label = "$N_{"+str(idx)+"}"+("'"*k)+"(\\xi)$"
             plt.plot(XI, DN_idx, label=label)
         plt.xlabel("$\\xi$")
+        unique_knots, counts = np.unique(self.knot, return_counts=True)
+        if unique_knots.size<=10:
+            ylim = plt.ylim()
+            y_text = ylim[1] + 0.05 * (ylim[1] - ylim[0])
+            id = 0
+            for xi, n in zip(unique_knots, counts):
+                plt.axvline(xi, color='gray', linestyle=':', linewidth=0.8)
+                if n==1:
+                    plt.text(xi, y_text, f"$\\xi_{{{id}}}$", ha='center', va='bottom', fontsize=10)
+                else:
+                    plt.text(xi, y_text, f"$\\xi_{{{id}-{id + n - 1}}}$", ha='center', va='bottom', fontsize=10)
+                id += n
+            plt.ylim(ylim[0], y_text + 0.05 * (ylim[1] - ylim[0]))
         if self.n+1<=10:
-            plt.legend()
+            plt.legend(loc='best')
         if show:
             plt.show()
     
@@ -600,6 +673,62 @@ class BSplineBasis:
         self.__init__(p3, knot3)
         STD = S@T@D
         return STD
+    
+    def greville_abscissa(
+        self, 
+        return_weights: bool=False
+        ) -> Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], np.ndarray[np.floating]]]:
+        r"""
+        Compute the Greville abscissa and optionally their weights for this 1D B-spline basis.
+
+        The Greville abscissa represent the parametric coordinates associated with each
+        control point. They are defined as the average of `p` consecutive internal knots.
+
+        Parameters
+        ----------
+        return_weights : bool, optional
+            If `True`, also returns the weights (support lengths) associated with each basis function.
+            By default, False.
+
+        Returns
+        -------
+        greville : np.ndarray[np.floating]
+            Array containing the Greville abscissa of size `n + 1`, where `n` is the last index
+            of the basis functions in this 1D basis.
+
+        weight : np.ndarray[np.floating], optional
+            Only returned if `return_weights` is `True`.
+            Array of the same size as `greville`, containing the length of the support of
+            each basis function (difference between the end and start knots of its support).
+
+        Notes
+        -----
+        - The Greville abscissa are computed as the average of `p` consecutive knots:
+          for the i-th basis function, its abscissa is
+          (knot[i+1] + knot[i+2] + ... + knot[i+p]) / p
+        - The weights represent the length of the support of each basis function,
+          computed as knot[i+p+1] - knot[i].
+        - The number of abscissa equals the number of control points.
+
+        Examples
+        --------
+        >>> degree = 2
+        >>> knot = np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')
+        >>> basis = BSplineBasis(degree, knot)
+        >>> greville = basis.greville_abscissa()
+        >>> greville
+        array([0.  , 0.25, 0.75, 1.  ])
+
+        Compute both abscissa and weights:
+        >>> greville, weight = basis.greville_abscissa(return_weights=True)
+        >>> weight
+        array([0.5, 1. , 1. , 0.5])
+        """
+        greville = np.convolve(self.knot[1:-1], np.ones(self.p, dtype=int), 'valid')/self.p
+        if return_weights:
+            weight = self.knot[(self.p+1):] - self.knot[:-(self.p+1)]
+            return greville, weight
+        return greville
 
 # %% fast functions for evaluation
 

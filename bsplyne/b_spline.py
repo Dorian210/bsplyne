@@ -1,5 +1,6 @@
 import os
 from typing import Iterable, Literal, Union
+import json, pickle
 
 import numpy as np
 import scipy.sparse as sps
@@ -10,6 +11,13 @@ from scipy.interpolate import griddata
 from bsplyne.b_spline_basis import BSplineBasis
 from bsplyne.my_wide_product import my_wide_product
 from bsplyne.save_utils import writePVD
+
+_can_visualize_pyvista = False
+try:
+    import pyvista as pv
+    _can_visualize_pyvista = True
+except ImportError:
+    pass
 
 class BSpline:
     """
@@ -195,6 +203,39 @@ class BSpline:
         """
         knots = [basis.knot for basis in self.bases]
         return knots
+    
+    def getCtrlShape(self) -> tuple[int]:
+        """
+        Get the shape of the control grid (number of control points per dimension).
+
+        This method returns a tuple giving, for each isoparametric direction, 
+        the number of control points associated with the corresponding B-spline basis. 
+        In each dimension, this number is equal to `n + 1`, where `n` is the highest 
+        basis function index.
+
+        Returns
+        -------
+        tuple of int
+            A tuple giving the number of control points in each dimension.
+
+        Notes
+        -----
+        - For a curve (1D), returns a single integer (`n1 + 1`,)
+        - For a surface (2D), returns (`n1 + 1`, `n2 + 1`)
+        - For a volume (3D), returns (`n1 + 1`, `n2 + 1`, `n3 + 1`)
+        - The product of these values gives the total number of control points, 
+        identical to the number of basis functions (`getNbFunc()`).
+
+        Examples
+        --------
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> spline.getCtrlShape()
+        (4, 4)
+        """
+        return tuple(basis.n + 1 for basis in self.bases)
 
     def getNbFunc(self) -> int:
         """
@@ -226,7 +267,7 @@ class BSpline:
         >>> spline.getNbFunc()
         16
         """
-        return np.prod([basis.n + 1 for basis in self.bases])
+        return np.prod(self.getCtrlShape())
 
     def getSpans(self) -> list[tuple[float, float]]:
         """
@@ -418,7 +459,7 @@ class BSpline:
             Number of evaluation points per element for each isoparametric dimension.
             If an `int` is provided, the same number is used for all dimensions.
             If an `Iterable` is provided, each value corresponds to a different dimension.
-            If `None`, uses `(p + 2)//2` points per element where `p` is the degree of each basis.
+            If `None`, uses `p//2 + 1` points per element where `p` is the degree of each basis.
             This number of points ensures an exact integration of a `p`-th degree polynomial.
             By default, None.
 
@@ -445,7 +486,7 @@ class BSpline:
         - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points), 
                                     (`xi` weights, `eta` weights, `zeta` weights))
         - The points and weights follow the Gauss-Legendre quadrature rule
-        - When `n_eval_per_elem` is `None`, uses `(p + 2)//2` points per element for exact
+        - When `n_eval_per_elem` is `None`, uses `p//2 + 1` points per element for exact
         integration of polynomials up to degree `p`
 
         Examples
@@ -455,13 +496,13 @@ class BSpline:
         ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
         >>> (xi, eta), (dxi, deta) = spline.gauss_legendre_for_integration()
-        >>> xi  # xi points
+        >>> xi  # 2 xi points per element => 4 points in total
         array([0.10566243, 0.39433757, 0.60566243, 0.89433757])
         >>> dxi  # xi weights
         array([0.25, 0.25, 0.25, 0.25])
         """
         if n_eval_per_elem is None:
-            n_eval_per_elem = (self.getDegrees() + 2)//2
+            n_eval_per_elem = self.getDegrees()//2 + 1
         if type(n_eval_per_elem) is int:
             n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
         if bounding_box is None:
@@ -749,7 +790,7 @@ class BSpline:
     
     def knotInsertion(
         self, 
-        ctrl_pts: np.ndarray[np.floating], 
+        ctrl_pts: Union[np.ndarray[np.floating], None], 
         knots_to_add: Iterable[Union[np.ndarray[np.float64], int]]
         ) -> np.ndarray[np.floating]:
         """
@@ -766,6 +807,8 @@ class BSpline:
             Shape: (`NPh`, n1, n2, ...) where:
             - `NPh` is the dimension of the physical space
             - ni is the number of control points in the i-th isoparametric dimension
+            If None is passed, the knot insertion is performed on the basis functions 
+            but not on the control points.
 
         knots_to_add : Iterable[Union[np.ndarray[np.floating], int]]
             Refinement specification for each isoparametric dimension.
@@ -826,6 +869,11 @@ class BSpline:
                 true_knots_to_add.append(knots_to_add_elem)
         knots_to_add = true_knots_to_add
         
+        if ctrl_pts is None:
+            for basis, knots_to_add_elem in zip(self.bases, knots_to_add):
+                basis.knotInsertion(knots_to_add_elem)
+            return None
+        
         pts_shape = np.empty(self.NPa, dtype='int')
         D = None
         for idx in range(self.NPa):
@@ -844,7 +892,7 @@ class BSpline:
     
     def orderElevation(
         self, 
-        ctrl_pts: np.ndarray[np.floating], 
+        ctrl_pts: Union[np.ndarray[np.floating], None], 
         t: Iterable[int]
         ) -> np.ndarray[np.floating]:
         """
@@ -857,11 +905,13 @@ class BSpline:
 
         Parameters
         ----------
-        ctrl_pts : np.ndarray[np.floating]
+        ctrl_pts : Union[np.ndarray[np.floating], None]
             Control points defining the B-spline geometry.
             Shape: (`NPh`, n1, n2, ...) where:
             - `NPh` is the dimension of the physical space
             - ni is the number of control points in the i-th isoparametric dimension
+            If None is passed, the order elevation is performed on the basis functions 
+            but not on the control points.
 
         t : Iterable[int]
             Degree elevation for each isoparametric dimension.
@@ -900,6 +950,11 @@ class BSpline:
         >>> spline.getDegrees()  # The degrees are modified
         array([3, 2])
         """
+        if ctrl_pts is None:
+            for basis, t_basis in zip(self.bases, t):
+                basis.orderElevation(t_basis)
+            return None
+        
         pts_shape = np.empty(self.NPa, dtype='int')
         STD = None
         for idx in range(self.NPa):
@@ -972,17 +1027,15 @@ class BSpline:
         >>> weights[0]  # weights for xi direction
         array([0.5, 1. , 1. , 0.5])
         """
-        greville = []
-        weights = []
-        for idx in range(self.NPa):
-            basis = self.bases[idx]
-            p = basis.p
-            knot = basis.knot
-            greville.append(np.convolve(knot[1:-1], np.ones(p, dtype=int), 'valid')/p)
-            weights.append(knot[(p+1):] - knot[:-(p+1)])
+        res = [basis.greville_abscissa(return_weights=return_weights) for basis in self.bases]
         if return_weights:
+            greville, weights = zip(*res)
+            greville = list(greville)
+            weights = list(weights)
             return greville, weights
-        return greville
+        else:
+            greville = list(res)
+            return greville
     
     def make_control_poly_meshes(self, 
                                  ctrl_pts: np.ndarray[np.floating], 
@@ -1627,8 +1680,156 @@ class BSpline:
         else:
             raise NotImplementedError("Can only export curves, sufaces or volumes !")
     
-    # def plotPV(self, ctrl_pts):
-    #     pass
+    def to_dict(self) -> dict:
+        """
+        Returns a dictionary representation of the BSpline object.
+        """
+        return {
+            'NPa': self.NPa,
+            'bases': [b.to_dict() for b in self.bases]
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "BSpline":
+        """
+        Creates a BSpline object from a dictionary representation.
+        """
+        NPa = data['NPa']
+        bases = np.array([BSplineBasis.from_dict(b) for b in data['bases']])
+        return cls(NPa, bases)
+    
+    def save(self, filepath: str, ctrl_pts: Union[np.ndarray, None]=None) -> None:
+        """
+        Save the BSpline object to a file.
+        Control points are optional.
+        Supported extensions: json, pkl
+        """
+        data = self.to_dict()
+        if ctrl_pts is not None:
+            data['ctrl_pts'] = ctrl_pts.tolist()
+        ext = filepath.split('.')[-1]
+        if ext == 'json':
+            with open(filepath, 'w') as f:
+                json.dump(data, f, indent=2)
+        elif ext == 'pkl':
+            with open(filepath, 'wb') as f:
+                pickle.dump(data, f)
+        else:
+            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+
+    @classmethod
+    def load(cls, filepath: str) -> Union["BSpline", tuple["BSpline", np.ndarray]]:
+        """
+        Load a BSpline object from a file.
+        May return control points if the file contains them.
+        Supported extensions: json, pkl
+        """
+        ext = filepath.split('.')[-1]
+        if ext == 'json':
+            with open(filepath, 'r') as f:
+                data = json.load(f)
+        elif ext == 'pkl':
+            with open(filepath, 'rb') as f:
+                data = pickle.load(f)
+        else:
+            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+        this = cls.from_dict(data)
+        if 'ctrl_pts' in data:
+            ctrl_pts = np.array(data['ctrl_pts'])
+            return this, ctrl_pts
+        return this
+    
+    def plot(
+        self, 
+        ctrl_pts: np.ndarray[np.floating], 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        plotter: Union[mpl.axes.Axes, 'pv.Plotter', None]=None, 
+        ctrl_color: str='#d95f02', 
+        interior_color: str='#666666', 
+        elem_color: str='#7570b3', 
+        border_color: str='#1b9e77', 
+        language: Union[Literal["english"], Literal["français"]]="english", 
+        show: bool=True
+        ) -> Union[mpl.axes.Axes, 'pv.Plotter']:
+        """
+        Plot the B-spline using either Matplotlib or PyVista, depending on availability.
+
+        Automatically selects the appropriate plotting backend (Matplotlib or PyVista)
+        based on which libraries are installed. Supports visualization of B-spline curves,
+        surfaces, and volumes in 2D or 3D space, with control mesh, element borders, and patch borders.
+
+        Parameters
+        ----------
+        ctrl_pts : np.ndarray[np.floating]
+            Control points defining the B-spline geometry.
+            Shape: (NPh, n1, n2, ...) where:
+            - NPh is the dimension of the physical space (2 or 3)
+            - ni is the number of control points in the i-th isoparametric dimension
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for visualizing the B-spline.
+            Can be specified as:
+            - Single integer: Same number for all dimensions
+            - Iterable of integers: Different numbers for each dimension
+            By default, 10.
+        plotter : Union[mpl.axes.Axes, 'pv.Plotter', None], optional
+            Plotter object for the visualization:
+            - If PyVista is available: Can be a `pv.Plotter` instance
+            - If only Matplotlib is available: Can be a `mpl.axes.Axes` instance
+            - If None, creates a new plotter/axes.
+            Default is None.
+        ctrl_color : str, optional
+            Color for the control mesh visualization.
+            Default is '#d95f02' (orange).
+        interior_color : str, optional
+            Color for the B-spline geometry.
+            Default is '#666666' (gray).
+        elem_color : str, optional
+            Color for element boundary visualization.
+            Default is '#7570b3' (purple).
+        border_color : str, optional
+            Color for patch boundary visualization.
+            Default is '#1b9e77' (green).
+        language : str, optional
+            Language for the plot labels and legends in matplotlib. Can be 'english' or 'français'.
+            Default is 'english'.
+        show : bool, optional
+            Whether to display the plot immediately.
+            Default is True.
+
+        Returns
+        -------
+        plotter : Union[mpl.axes.Axes, 'pv.Plotter']
+            The plotter object used for visualization (Matplotlib axes or PyVista plotter).
+
+        Notes
+        -----
+        - If PyVista is available and the physical space is 3D, uses `plotPV` for 3D visualization.
+        - Otherwise, uses `plotMPL` for 2D/3D visualization with Matplotlib.
+        - For 3D visualization, PyVista is recommended for better interactivity and rendering.
+        - For 2D visualization, Matplotlib is used by default.
+
+        Examples
+        --------
+        Plot a 2D curve in 2D space:
+        >>> degrees = [2]
+        >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> ctrl_pts = np.random.rand(2, 3)  # 2D control points
+        >>> spline.plot(ctrl_pts)
+
+        Plot a 2D surface in 3D space with PyVista (if available):
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> ctrl_pts = np.random.rand(3, 3, 3)  # 3D control points
+        >>> spline.plot(ctrl_pts)
+        """
+        NPh = ctrl_pts.shape[0]
+        if _can_visualize_pyvista and NPh==3:
+            return self.plotPV(ctrl_pts, n_eval_per_elem, plotter, ctrl_color, interior_color, elem_color, border_color, show)
+        else:
+            return self.plotMPL(ctrl_pts, n_eval_per_elem, plotter, ctrl_color, interior_color, elem_color, border_color, language, show)
     
     def plotMPL(
         self, 
@@ -1639,8 +1840,9 @@ class BSpline:
         interior_color: str='#7570b3', 
         elem_color: str='#666666', 
         border_color: str='#d95f02', 
-        language: Union[Literal["english"], Literal["français"]]="english"
-        ):
+        language: Union[Literal["english"], Literal["français"]]="english", 
+        show: bool=True
+        ) -> Union[mpl.axes.Axes, None]:
         """
         Plot the B-spline using Matplotlib.
 
@@ -1697,6 +1899,15 @@ class BSpline:
         language: str, optional
             Language for the plot labels. Can be 'english' or 'français'.
             Default is 'english'.
+        
+        show : bool, optional
+            Whether to display the plot immediately. Can be useful to add more stuff to the plot.
+            Default is True.
+        
+        Returns
+        -------
+        ax : Union[mpl.axes.Axes, None]
+            Matplotlib axes for the plot if show is deactivated, otherwise None.
 
         Notes
         -----
@@ -1846,3 +2057,143 @@ class BSpline:
                 raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
         else:
             raise ValueError(f"Can't plot in a {NPh}D space.")
+        if show:
+            plt.show()
+        else:
+            return ax
+
+    def plotPV(
+        self, 
+        ctrl_pts: np.ndarray[np.floating], 
+        n_eval_per_elem: Union[int, Iterable[int]]=10, 
+        pv_plotter: Union['pv.Plotter', None]=None, 
+        ctrl_color: str='#d95f02', 
+        interior_color: str='#666666', 
+        elem_color: str='#7570b3', 
+        border_color: str='#1b9e77', 
+        show: bool=True
+        ) -> Union['pv.Plotter', None]:
+        """
+        Plot the B-spline using PyVista for 3D visualization.
+
+        Creates an interactive 3D visualization of the B-spline geometry showing the control mesh,
+        B-spline surface/curve/volume, element borders, and patch borders. Supports plotting
+        1D curves, 2D surfaces, and 3D volumes in 3D space.
+
+        Parameters
+        ----------
+        ctrl_pts : np.ndarray[np.floating]
+            Control points defining the B-spline geometry.
+            Shape: (NPh, n1, n2, ...) where:
+            - NPh is the dimension of the physical space (2 or 3)
+            - ni is the number of control points in the i-th isoparametric dimension
+            If NPh=2, control points are automatically converted to 3D for plotting.
+        n_eval_per_elem : Union[int, Iterable[int]], optional
+            Number of evaluation points per element for visualizing the B-spline.
+            Can be specified as:
+            - Single integer: Same number for all dimensions
+            - Iterable of integers: Different numbers for each dimension
+            By default, 10.
+        pv_plotter : Union['pv.Plotter', None], optional
+            PyVista plotter for visualization. If None, creates a new plotter.
+            Default is None.
+        ctrl_color : str, optional
+            Color for the control mesh visualization.
+            Default is '#d95f02' (orange).
+        interior_color : str, optional
+            Color for the B-spline geometry.
+            Default is '#666666' (gray).
+        elem_color : str, optional
+            Color for element boundary visualization.
+            Default is '#7570b3' (purple).
+        border_color : str, optional
+            Color for patch boundary visualization.
+            Default is '#1b9e77' (green).
+        show : bool, optional
+            Whether to display the plot immediately.
+            Default is True.
+
+        Returns
+        -------
+        pv_plotter : Union['pv.Plotter', None]
+            The PyVista plotter object used for visualization if show is False.
+            Otherwise, returns None.
+
+        Notes
+        -----
+        - For 1D B-splines: Plots the curve and control points.
+        - For 2D B-splines: Plots the surface, control points, element borders, and patch borders.
+        - For 3D B-splines: Plots the volume faces, control points, element borders, and patch borders.
+        - If control points are 2D, they are automatically converted to 3D with z=0 for plotting.
+
+        Examples
+        --------
+        Plot a curved line in 3D space:
+        >>> degrees = [2]
+        >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> ctrl_pts = np.random.rand(3, 3)  # 3D control points
+        >>> spline.plotPV(ctrl_pts)
+        
+        Plot a 2D surface in 3D space:
+        >>> degrees = [2, 2]
+        >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float'),
+        ...          np.array([0, 0, 0, 1, 1, 1], dtype='float')]
+        >>> spline = BSpline(degrees, knots)
+        >>> ctrl_pts = np.random.rand(3, 3, 3)  # 3D control points
+        >>> spline.plotPV(ctrl_pts)
+        """
+        import pyvista as pv
+        NPh = ctrl_pts.shape[0]
+        if NPh==2:
+            ctrl_pts = np.concatenate((ctrl_pts, np.zeros((1, ctrl_pts.shape[1:]))), axis=0)
+            print("Control points converted to 3D for plot.")
+        elif NPh!=3:
+            raise ValueError("Can only plot in a 3D space.")
+        if pv_plotter is None:
+            pv_plotter = pv.Plotter()
+        if self.NPa==1:
+            lines = self.__call__(ctrl_pts, self.linspace(n_eval_per_elem=n_eval_per_elem)).T
+            pv_plotter.add_lines(lines, connected=True, color=interior_color, width=2)
+            points = self.__call__(ctrl_pts, self.linspace(n_eval_per_elem=1)).T
+            pv_plotter.add_points(points, color=border_color, point_size=10)
+            pv_plotter.add_points(ctrl_pts.T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
+        elif self.NPa==2:
+            xi, eta = self.linspace(n_eval_per_elem=n_eval_per_elem)
+            xi_elem, eta_elem = self.linspace(n_eval_per_elem=1)
+            x, y, z = self.__call__(ctrl_pts, [xi, eta])
+            x_xi, y_xi, z_xi = self.__call__(ctrl_pts, [xi_elem, eta])
+            x_eta, y_eta, z_eta = self.__call__(ctrl_pts, [xi, eta_elem])
+            pv_plotter.add_mesh(pv.StructuredGrid(x, y, z), color=interior_color, opacity=0.5)
+            lines_xi = np.repeat(np.stack((x_xi, y_xi, z_xi)).transpose(1, 2, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
+            lines_eta = np.repeat(np.stack((x_eta, y_eta, z_eta)).transpose(2, 1, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
+            lines = np.concatenate((lines_xi, lines_eta), axis=0)
+            pv_plotter.add_lines(lines, connected=False, color=elem_color, width=2)
+            pv_plotter.add_points(ctrl_pts.reshape((3, -1)).T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
+        elif self.NPa==3:
+            xi, eta, zeta = self.linspace(n_eval_per_elem=n_eval_per_elem)
+            xi_elem, eta_elem, zeta_elem = self.linspace(n_eval_per_elem=1)
+            XI_faces = [[[xi, eta, np.array([zeta[0]])], [xi, eta, np.array([zeta[-1]])]], 
+                        [[xi, np.array([eta[0]]), zeta], [xi, np.array([eta[-1]]), zeta]], 
+                        [[np.array([xi[0]]), eta, zeta], [np.array([xi[-1]]), eta, zeta]]]
+            XI_elem_borders = [[[[xi_elem, eta, np.array([zeta[ 0]])], [xi, eta_elem, np.array([zeta[ 0]])]], 
+                                [[xi_elem, eta, np.array([zeta[-1]])], [xi, eta_elem, np.array([zeta[-1]])]]], 
+                               [[[xi_elem, np.array([eta[ 0]]), zeta], [xi, np.array([eta[ 0]]), zeta_elem]], 
+                                [[xi_elem, np.array([eta[-1]]), zeta], [xi, np.array([eta[-1]]), zeta_elem]]], 
+                               [[[np.array([xi[ 0]]), eta_elem, zeta], [np.array([xi[ 0]]), eta, zeta_elem]], 
+                                [[np.array([xi[-1]]), eta_elem, zeta], [np.array([xi[-1]]), eta, zeta_elem]]]]
+            for XI_face_pair, XI_elem_borders_pair in zip(XI_faces, XI_elem_borders):
+                for XI_face, (XI_elem_border_a, XI_elem_border_b) in zip(XI_face_pair, XI_elem_borders_pair):
+                    x, y, z = np.squeeze(np.array(self.__call__(ctrl_pts, XI_face)))
+                    x_a, y_a, z_a = np.squeeze(np.array(self.__call__(ctrl_pts, XI_elem_border_a)))
+                    x_b, y_b, z_b = np.squeeze(np.array(self.__call__(ctrl_pts, XI_elem_border_b)))
+                    pv_plotter.add_mesh(pv.StructuredGrid(x, y, z), color=interior_color, opacity=0.5)
+                    lines_xi = np.repeat(np.stack((x_a, y_a, z_a)).transpose(1, 2, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
+                    lines_eta = np.repeat(np.stack((x_b, y_b, z_b)).transpose(2, 1, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
+                    lines = np.concatenate((lines_xi, lines_eta), axis=0)
+                    pv_plotter.add_lines(lines, connected=False, color=elem_color, width=2)
+            pv_plotter.add_points(ctrl_pts.reshape((3, -1)).T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
+        else:
+            raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
+        if show: pv_plotter.show()
+        return pv_plotter
