@@ -35,7 +35,7 @@ ctrl_pts = np.array([
     [[0.00, 0.33, 0.33, 0.00], [1.00, 1.67, 1.67, 1.00], [2.00, 3.00, 3.00, 2.00], [3.00, 4.50, 4.50, 3.00]]
 ])
 
-spline.plotMPL(ctrl_pts)
+spline.plot(ctrl_pts, show=False)
 plt.title("2D Surface B-Spline")
 plt.show()
 
@@ -50,7 +50,7 @@ ctrl_pts = spline.orderElevation(ctrl_pts, t)
 print("Control points after order elevation:")
 print(ctrl_pts)
 
-spline.plotMPL(ctrl_pts)
+spline.plot(ctrl_pts, show=False)
 plt.title("Surface B-Spline after Order Elevation")
 plt.show()
 
@@ -65,7 +65,7 @@ ctrl_pts = spline.knotInsertion(ctrl_pts, knots_to_add)
 print("Control points after knot insertion:")
 print(ctrl_pts)
 
-spline.plotMPL(ctrl_pts)
+spline.plot(ctrl_pts, show=False)
 plt.title("Surface B-Spline after Knot Insertion")
 plt.show()
 

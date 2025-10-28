@@ -1,7 +1,6 @@
 from typing import Iterable, Union
 import json, pickle
 import numpy as np
-import numpy.typing as npt
 import numba as nb
 import scipy.sparse as sps
 from scipy.special import comb

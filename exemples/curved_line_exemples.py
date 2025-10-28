@@ -25,7 +25,7 @@ plt.show()
 ctrl_pts = np.array([[0, 1, 2, 1], 
                      [1, 0, 1, 3]])
 print(f"Control points array of size {ctrl_pts.shape}. First index for x or y, and second for the 4 control points.")
-spline.plotMPL(ctrl_pts) # notably displays plt.plot(basis_values@ctrl_pts[0], basis_values@ctrl_pts[1])
+spline.plot(ctrl_pts, show=False) # notably displays plt.plot(basis_values@ctrl_pts[0], basis_values@ctrl_pts[1])
 plt.title("Linear B-Spline")
 plt.show()
 
@@ -40,7 +40,7 @@ ctrl_pts = spline.orderElevation(ctrl_pts, t)
 print("Control points after order elevation:")
 print(ctrl_pts)
 
-spline.plotMPL(ctrl_pts)
+spline.plot(ctrl_pts, show=False)
 plt.title("Linear B-Spline after Order Elevation")
 plt.show()
 
@@ -55,7 +55,7 @@ ctrl_pts = spline.knotInsertion(ctrl_pts, knots_to_add)
 print("Control points after knot insertion:")
 print(ctrl_pts)
 
-spline.plotMPL(ctrl_pts)
+spline.plot(ctrl_pts, show=False)
 plt.title("Linear B-Spline after Knot Insertion")
 plt.show()
 

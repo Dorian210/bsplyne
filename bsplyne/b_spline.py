@@ -1750,7 +1750,7 @@ class BSpline:
         border_color: str='#1b9e77', 
         language: Union[Literal["english"], Literal["français"]]="english", 
         show: bool=True
-        ) -> Union[mpl.axes.Axes, 'pv.Plotter']:
+        ) -> Union[mpl.axes.Axes, 'pv.Plotter', None]:
         """
         Plot the B-spline using either Matplotlib or PyVista, depending on availability.
 
@@ -1798,8 +1798,9 @@ class BSpline:
 
         Returns
         -------
-        plotter : Union[mpl.axes.Axes, 'pv.Plotter']
-            The plotter object used for visualization (Matplotlib axes or PyVista plotter).
+        plotter : Union[mpl.axes.Axes, 'pv.Plotter', None]
+            The plotter object used for visualization (Matplotlib axes or PyVista plotter)
+            if `show` is False. Otherwise, returns None.
 
         Notes
         -----
@@ -2146,7 +2147,7 @@ class BSpline:
         import pyvista as pv
         NPh = ctrl_pts.shape[0]
         if NPh==2:
-            ctrl_pts = np.concatenate((ctrl_pts, np.zeros((1, ctrl_pts.shape[1:]))), axis=0)
+            ctrl_pts = np.concatenate((ctrl_pts, np.zeros((1, *ctrl_pts.shape[1:]))), axis=0)
             print("Control points converted to 3D for plot.")
         elif NPh!=3:
             raise ValueError("Can only plot in a 3D space.")
@@ -2195,5 +2196,7 @@ class BSpline:
             pv_plotter.add_points(ctrl_pts.reshape((3, -1)).T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
         else:
             raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
-        if show: pv_plotter.show()
-        return pv_plotter
+        if show:
+            pv_plotter.show()
+        else:
+            return pv_plotter
