@@ -9,6 +9,7 @@ import tempfile, os
 import time
 import gc
 
+
 def _save_worker(save_queue: queue.Queue):
     """
     Background worker that saves data to disk from a queue.
@@ -38,7 +39,17 @@ def _save_worker(save_queue: queue.Queue):
         np.save(fname, to_save, allow_pickle=True)
         save_queue.task_done()
 
-def _worker(func: Iterable[Callable], block_args: Iterable[tuple], idx: int, temp_dir: str, verbose: bool, jupyter: bool, pbar_title_prefix: str, shared_mem: Union[tuple[str, tuple[int, ...], type], None]) -> str:
+
+def _worker(
+    func: Iterable[Callable],
+    block_args: Iterable[tuple],
+    idx: int,
+    temp_dir: str,
+    verbose: bool,
+    jupyter: bool,
+    pbar_title_prefix: str,
+    shared_mem: Union[tuple[str, tuple[int, ...], type], None],
+) -> str:
     """
     Apply a function to a sequence of argument tuples, saving results asynchronously during computation.
 
@@ -86,8 +97,13 @@ def _worker(func: Iterable[Callable], block_args: Iterable[tuple], idx: int, tem
     save_queue = queue.Queue(maxsize=10)
     writer_thread = threading.Thread(target=_save_worker, args=(save_queue,))
     writer_thread.start()
-    
-    with tqdm(block_args, desc=f"{pbar_title_prefix}: Block {idx}", disable=not verbose, position=position) as pbar:
+
+    with tqdm(
+        block_args,
+        desc=f"{pbar_title_prefix}: Block {idx}",
+        disable=not verbose,
+        position=position,
+    ) as pbar:
         if shared_mem is not None:
             shm_name, shape, dtype = shared_mem
             shm = shared_memory.SharedMemory(name=shm_name)
@@ -106,18 +122,21 @@ def _worker(func: Iterable[Callable], block_args: Iterable[tuple], idx: int, tem
                 save_queue.put((fname, result))  # mise en file (bloque si trop plein)
 
     # Finalisation propre
-    save_queue.put(None)         # signal de fin
-    writer_thread.join()         # on attend que tout soit écrit
+    save_queue.put(None)  # signal de fin
+    writer_thread.join()  # on attend que tout soit écrit
     gc.collect()
     return block_folder
 
-def parallel_blocks_inner(funcs: Iterable[Callable], 
-                          all_args: Iterable[tuple], 
-                          num_blocks: int, 
-                          verbose: bool, 
-                          pbar_title: str, 
-                          disable_parallel: bool, 
-                          shared_mem_last_arg: Union[np.ndarray, None]) -> list:
+
+def parallel_blocks_inner(
+    funcs: Iterable[Callable],
+    all_args: Iterable[tuple],
+    num_blocks: int,
+    verbose: bool,
+    pbar_title: str,
+    disable_parallel: bool,
+    shared_mem_last_arg: Union[np.ndarray, None],
+) -> list:
     """
     Execute a list of functions with their corresponding argument tuples, optionally in parallel blocks.
 
@@ -176,35 +195,42 @@ def parallel_blocks_inner(funcs: Iterable[Callable],
     # Detect if running in a Jupyter environment
     try:
         from IPython import get_ipython
+
         jupyter = get_ipython().__class__.__name__ == "ZMQInteractiveShell"
     except:
         jupyter = False
-    
+
     # Runs in sequential if necessary
     if disable_parallel:
         if shared_mem_last_arg is not None:
             all_args = [list(args) + [shared_mem_last_arg] for args in all_args]
         results = []
         position = 0 if jupyter else 0
-        for i, (func, args) in enumerate(tqdm(zip(funcs, all_args), 
-                                                  total=n_tasks, 
-                                                  desc=pbar_title,
-                                                  disable=not verbose, 
-                                                  position=position)):
+        for i, (func, args) in enumerate(
+            tqdm(
+                zip(funcs, all_args),
+                total=n_tasks,
+                desc=pbar_title,
+                disable=not verbose,
+                position=position,
+            )
+        ):
             results.append(func(*args))
         return results
-    
+
     # Create the shared memory buffer if necessary
     if shared_mem_last_arg is not None:
         shm = shared_memory.SharedMemory(create=True, size=shared_mem_last_arg.nbytes)
-        np.ndarray(shared_mem_last_arg.shape, dtype=shared_mem_last_arg.dtype, buffer=shm.buf)[:] = shared_mem_last_arg
+        np.ndarray(
+            shared_mem_last_arg.shape, dtype=shared_mem_last_arg.dtype, buffer=shm.buf
+        )[:] = shared_mem_last_arg
         shared_mem = (shm.name, shared_mem_last_arg.shape, shared_mem_last_arg.dtype)
     else:
         shared_mem = None
-    
+
     # Split the functions and arguments into blocks
     nb_each, extras = divmod(n_tasks, num_blocks)
-    sizes = extras*[nb_each + 1] + (num_blocks - extras)*[nb_each]
+    sizes = extras * [nb_each + 1] + (num_blocks - extras) * [nb_each]
     blocks = []
     funcs_blocks = []
     start = 0
@@ -215,13 +241,15 @@ def parallel_blocks_inner(funcs: Iterable[Callable],
         start = end
 
     temp_dir = tempfile.mkdtemp(prefix="parallel_blocks_")
-    args = [(func_block, block, i, temp_dir, verbose, jupyter, pbar_title, shared_mem) 
-            for i, (func_block, block) in enumerate(zip(funcs_blocks, blocks))]
+    args = [
+        (func_block, block, i, temp_dir, verbose, jupyter, pbar_title, shared_mem)
+        for i, (func_block, block) in enumerate(zip(funcs_blocks, blocks))
+    ]
 
     # Start the worker processes
     with mp.Pool(num_blocks) as pool:
         files = pool.starmap(_worker, args)
-    
+
     # Free the memory space allocated to the shared array
     if shared_mem_last_arg is not None:
         shm.close()
@@ -240,14 +268,17 @@ def parallel_blocks_inner(funcs: Iterable[Callable],
         os.rmdir(temp_dir)
     return results
 
-def parallel_blocks(funcs: Union[Callable, Iterable[Callable]], 
-                    all_args: Union[Iterable[tuple], None]=None, 
-                    num_blocks: Union[int, None]=None, 
-                    verbose: bool=True, 
-                    pbar_title: str="Processing blocks", 
-                    disable_parallel: bool=False, 
-                    est_proc_cost: float=0.5, 
-                    shared_mem_last_arg: Union[np.ndarray, None]=None) -> list:
+
+def parallel_blocks(
+    funcs: Union[Callable, Iterable[Callable]],
+    all_args: Union[Iterable[tuple], None] = None,
+    num_blocks: Union[int, None] = None,
+    verbose: bool = True,
+    pbar_title: str = "Processing blocks",
+    disable_parallel: bool = False,
+    est_proc_cost: float = 0.5,
+    shared_mem_last_arg: Union[np.ndarray, None] = None,
+) -> list:
     """
     Execute a set of independent tasks sequentially or in parallel, depending on their estimated cost.
 
@@ -299,29 +330,49 @@ def parallel_blocks(funcs: Union[Callable, Iterable[Callable]],
     - Compatible with Jupyter progress bars (`tqdm.notebook`).
     """
     if num_blocks is None:
-        num_blocks = max(1, os.cpu_count()//2)
-    
+        num_blocks = max(1, os.cpu_count() // 2)
+
     if callable(funcs):
-        assert all_args is not None, "If 'funcs' is a single callable, 'all_args' must be provided as a list of argument tuples."
-        funcs = [funcs]*len(all_args)
+        assert (
+            all_args is not None
+        ), "If 'funcs' is a single callable, 'all_args' must be provided as a list of argument tuples."
+        funcs = [funcs] * len(all_args)
     else:
         if all_args is None:
-            all_args = [()]*len(funcs)
-        assert len(funcs)==len(all_args), "If 'funcs' is an iterable of callables, its length must match the number of argument tuples in 'all_args'."
+            all_args = [()] * len(funcs)
+        assert len(funcs) == len(
+            all_args
+        ), "If 'funcs' is an iterable of callables, its length must match the number of argument tuples in 'all_args'."
 
     n_tasks = len(all_args)
-    if disable_parallel or num_blocks==1 or n_tasks<=1:
-        return parallel_blocks_inner(funcs, all_args, num_blocks, verbose, pbar_title, True, shared_mem_last_arg)
-    
+    if disable_parallel or num_blocks == 1 or n_tasks <= 1:
+        return parallel_blocks_inner(
+            funcs, all_args, num_blocks, verbose, pbar_title, True, shared_mem_last_arg
+        )
+
     t0 = time.time()
-    first_result = funcs[0](*all_args[0]) if shared_mem_last_arg is None else funcs[0](*all_args[0], shared_mem_last_arg)
+    first_result = (
+        funcs[0](*all_args[0])
+        if shared_mem_last_arg is None
+        else funcs[0](*all_args[0], shared_mem_last_arg)
+    )
     t_first = time.time() - t0
-    t_thresh = (num_blocks/(num_blocks - 1))*(num_blocks/n_tasks)*est_proc_cost
-    disable_parallel = t_first<=t_thresh
+    t_thresh = (num_blocks / (num_blocks - 1)) * (num_blocks / n_tasks) * est_proc_cost
+    disable_parallel = t_first <= t_thresh
     if verbose:
-        print(f"First task time: {t_first:.3f}s, t_seuil: {t_thresh:.3f}s -> "
-            f"{'Sequential' if disable_parallel else 'Parallel'}")
-    results_rest = parallel_blocks_inner(funcs[1:], all_args[1:], num_blocks, verbose, pbar_title, disable_parallel, shared_mem_last_arg)
+        print(
+            f"First task time: {t_first:.3f}s, t_seuil: {t_thresh:.3f}s -> "
+            f"{'Sequential' if disable_parallel else 'Parallel'}"
+        )
+    results_rest = parallel_blocks_inner(
+        funcs[1:],
+        all_args[1:],
+        num_blocks,
+        verbose,
+        pbar_title,
+        disable_parallel,
+        shared_mem_last_arg,
+    )
     results = [first_result] + results_rest
-    
+
     return results

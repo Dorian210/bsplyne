@@ -6,13 +6,14 @@ import scipy.sparse as sps
 from scipy.special import comb
 import matplotlib.pyplot as plt
 
+
 class BSplineBasis:
     """
     BSpline basis in 1D.
 
-    A class representing a one-dimensional B-spline basis with functionality for evaluation, 
-    manipulation and visualization of basis functions. Provides methods for basis function 
-    evaluation, derivatives computation, knot insertion, order elevation, and integration 
+    A class representing a one-dimensional B-spline basis with functionality for evaluation,
+    manipulation and visualization of basis functions. Provides methods for basis function
+    evaluation, derivatives computation, knot insertion, order elevation, and integration
     point generation.
 
     Attributes
@@ -20,12 +21,12 @@ class BSplineBasis:
     p : int
         Degree of the polynomials composing the basis.
     knot : np.ndarray[np.floating]
-        Knot vector defining the B-spline basis. Contains non-decreasing sequence 
+        Knot vector defining the B-spline basis. Contains non-decreasing sequence
         of isoparametric coordinates.
     m : int
         Last index of the knot vector (size - 1).
-    n : int 
-        Last index of the basis functions. When evaluated, returns an array of size 
+    n : int
+        Last index of the basis functions. When evaluated, returns an array of size
         `n + 1`.
     span : tuple[float, float]
         Interval of definition of the basis `(knot[p], knot[m - p])`.
@@ -33,7 +34,7 @@ class BSplineBasis:
     Notes
     -----
     The basis functions are defined over the isoparametric space specified by the knot vector.
-    Basis function evaluation and manipulation methods use efficient algorithms based on 
+    Basis function evaluation and manipulation methods use efficient algorithms based on
     Cox-de Boor recursion formulas.
 
     See Also
@@ -41,12 +42,13 @@ class BSplineBasis:
     `numpy.ndarray` : Array type used for knot vector storage
     `scipy.sparse` : Sparse matrix formats used for basis function evaluations
     """
+
     p: int
     knot: np.ndarray[np.floating]
     m: int
     n: int
     span: tuple[float, float]
-    
+
     def __init__(self, p: int, knot: Iterable[float]):
         """
         Initialize a B-spline basis with specified degree and knot vector.
@@ -56,7 +58,7 @@ class BSplineBasis:
         p : int
             Degree of the B-spline polynomials.
         knot : Iterable[float]
-            Knot vector defining the B-spline basis. Must be a non-decreasing sequence 
+            Knot vector defining the B-spline basis. Must be a non-decreasing sequence
             of real numbers.
 
         Returns
@@ -71,7 +73,7 @@ class BSplineBasis:
         - Must be non-decreasing
         - For non closed B-spline curves, first and last knots must have multiplicity `p + 1`
 
-        The basis functions are defined over the isoparametric space specified by 
+        The basis functions are defined over the isoparametric space specified by
         the knot vector. The span of the basis is [`knot[p]`, `knot[m - p]`], where
         `m` is the last index of the knot vector.
 
@@ -81,17 +83,17 @@ class BSplineBasis:
         >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
         """
         self.p = p
-        self.knot = np.array(knot, dtype='float')
+        self.knot = np.array(knot, dtype="float")
         self.m = self.knot.size - 1
         self.n = self.m - self.p - 1
         self.span = (self.knot[self.p], self.knot[self.m - self.p])
-    
-    def linspace(self, n_eval_per_elem: int=10) -> np.ndarray[np.floating]:
+
+    def linspace(self, n_eval_per_elem: int = 10) -> np.ndarray[np.floating]:
         """
         Generate evenly spaced points over the basis span.
 
-        Creates a set of evaluation points by distributing them uniformly within each knot span 
-        (element) of the basis. Points are evenly spaced within elements but spacing may vary 
+        Creates a set of evaluation points by distributing them uniformly within each knot span
+        (element) of the basis. Points are evenly spaced within elements but spacing may vary
         between different elements.
 
         Parameters
@@ -110,27 +112,35 @@ class BSplineBasis:
         1. Identifies unique knot spans (elements) in the isoparametric space
         2. Distributes points evenly within each element
         3. Combines points from all elements into a single array
-        
+
         Examples
         --------
         >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
         >>> basis.linspace(5)
         array([0. , 0.2, 0.4, 0.6, 0.8, 1. ])
         """
-        knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=self.span[0], self.knot<=self.span[1])])
+        knot_uniq = np.unique(
+            self.knot[
+                np.logical_and(self.knot >= self.span[0], self.knot <= self.span[1])
+            ]
+        )
         xi = np.linspace(knot_uniq[-2], knot_uniq[-1], n_eval_per_elem + 1)
         for i in range(knot_uniq.size - 2, 0, -1):
-            xi = np.append(np.linspace(knot_uniq[i-1], knot_uniq[i], n_eval_per_elem, endpoint=False), 
-                            xi)
+            xi = np.append(
+                np.linspace(
+                    knot_uniq[i - 1], knot_uniq[i], n_eval_per_elem, endpoint=False
+                ),
+                xi,
+            )
         return xi
-    
+
     def linspace_for_integration(
-        self, 
-        n_eval_per_elem: int=10, 
-        bounding_box: Union[tuple[float, float], None]=None
-        ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
+        self,
+        n_eval_per_elem: int = 10,
+        bounding_box: Union[tuple[float, float], None] = None,
+    ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
         """
-        Generate points and weights for numerical integration over knot spans in the 
+        Generate points and weights for numerical integration over knot spans in the
         isoparametric space. Points are evenly distributed within each element (knot span),
         though spacing may vary between different elements.
 
@@ -145,7 +155,7 @@ class BSplineBasis:
         Returns
         -------
         xi : np.ndarray[np.floating]
-            Array of integration points in isoparametric coordinates, evenly spaced 
+            Array of integration points in isoparametric coordinates, evenly spaced
             within each element.
         dxi : np.ndarray[np.floating]
             Array of corresponding integration weights, which may vary between elements
@@ -156,7 +166,7 @@ class BSplineBasis:
         1. Identifying unique knot spans (elements) in the isoparametric space
         2. Distributing points evenly within each element
         3. Computing appropriate weights for each point based on the element size
-        
+
         When `bounding_box` is provided, integration is restricted to that interval,
         and elements are adjusted accordingly.
 
@@ -169,57 +179,63 @@ class BSplineBasis:
             lower, upper = self.span
         else:
             lower, upper = bounding_box
-        knot_uniq = np.unique(self.knot[np.logical_and(self.knot>=self.span[0], self.knot<=self.span[1])])
+        knot_uniq = np.unique(
+            self.knot[
+                np.logical_and(self.knot >= self.span[0], self.knot <= self.span[1])
+            ]
+        )
         xi = []
         dxi = []
         for i in range(knot_uniq.size - 1):
             a = knot_uniq[i]
             b = knot_uniq[i + 1]
-            if a<upper and b>lower:
-                if a<lower and b>upper:
-                    dxi_i_l = (upper - lower)/n_eval_per_elem
-                    if (lower - 0.5*dxi_i_l)<a:
-                        dxi_i_u = (upper - a)/n_eval_per_elem
-                        if (upper + 0.5*dxi_i_u)>b:
-                            dxi_i = (b - a)/n_eval_per_elem
+            if a < upper and b > lower:
+                if a < lower and b > upper:
+                    dxi_i_l = (upper - lower) / n_eval_per_elem
+                    if (lower - 0.5 * dxi_i_l) < a:
+                        dxi_i_u = (upper - a) / n_eval_per_elem
+                        if (upper + 0.5 * dxi_i_u) > b:
+                            dxi_i = (b - a) / n_eval_per_elem
                         else:
-                            b = upper + 0.5*dxi_i_u
+                            b = upper + 0.5 * dxi_i_u
                             dxi_i = dxi_i_u
                     else:
-                        a = lower - 0.5*dxi_i_l
+                        a = lower - 0.5 * dxi_i_l
                         dxi_i_u = dxi_i_l
-                        if (upper + 0.5*dxi_i_u)>b:
-                            dxi_i = (b - lower)/n_eval_per_elem
+                        if (upper + 0.5 * dxi_i_u) > b:
+                            dxi_i = (b - lower) / n_eval_per_elem
                         else:
                             dxi_i = dxi_i_u
-                            b = upper + 0.5*dxi_i_u
-                elif a<lower and b>lower:
-                    dxi_i_l = (b - lower)/n_eval_per_elem
-                    if (lower - 0.5*dxi_i_l)<a:
-                        dxi_i = (b - a)/n_eval_per_elem
+                            b = upper + 0.5 * dxi_i_u
+                elif a < lower and b > lower:
+                    dxi_i_l = (b - lower) / n_eval_per_elem
+                    if (lower - 0.5 * dxi_i_l) < a:
+                        dxi_i = (b - a) / n_eval_per_elem
                     else:
-                        a = lower - 0.5*dxi_i_l
+                        a = lower - 0.5 * dxi_i_l
                         dxi_i = dxi_i_l
-                elif a<upper and b>upper:
-                    dxi_i_u = (upper - a)/n_eval_per_elem
-                    if (upper + 0.5*dxi_i_u)>b:
-                        dxi_i = (b - a)/n_eval_per_elem
+                elif a < upper and b > upper:
+                    dxi_i_u = (upper - a) / n_eval_per_elem
+                    if (upper + 0.5 * dxi_i_u) > b:
+                        dxi_i = (b - a) / n_eval_per_elem
                     else:
-                        b = upper + 0.5*dxi_i_u
+                        b = upper + 0.5 * dxi_i_u
                         dxi_i = dxi_i_u
                 else:
-                    dxi_i = (b - a)/n_eval_per_elem
-                xi.append(np.linspace(a + 0.5*dxi_i, b - 0.5*dxi_i, n_eval_per_elem))
-                dxi.append(dxi_i*np.ones(n_eval_per_elem))
+                    dxi_i = (b - a) / n_eval_per_elem
+                xi.append(
+                    np.linspace(a + 0.5 * dxi_i, b - 0.5 * dxi_i, n_eval_per_elem)
+                )
+                dxi.append(dxi_i * np.ones(n_eval_per_elem))
         xi = np.hstack(xi)
         dxi = np.hstack(dxi)
         return xi, dxi
-    
+
     def gauss_legendre_for_integration(
-        self, 
-        n_eval_per_elem: Union[int, None]=None, 
-        bounding_box: Union[tuple[float, float], None]=None
-        ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
+        self,
+        n_eval_per_elem: Union[int, None] = None,
+        bounding_box: Union[tuple[float, float], None] = None,
+    ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
         """
         Generate Gauss-Legendre quadrature points and weights for numerical integration over the B-spline basis.
 
@@ -258,23 +274,38 @@ class BSplineBasis:
         array([0.27777778, 0.44444444, 0.27777778])
         """
         if n_eval_per_elem is None:
-            n_eval_per_elem = self.p//2 + 1
+            n_eval_per_elem = self.p // 2 + 1
         if bounding_box is None:
             lower, upper = self.span
         else:
             lower, upper = bounding_box
-        knot_uniq = np.hstack(([lower], np.unique(self.knot[np.logical_and(self.knot>lower, self.knot<upper)]), [upper]))
+        knot_uniq = np.hstack(
+            (
+                [lower],
+                np.unique(
+                    self.knot[np.logical_and(self.knot > lower, self.knot < upper)]
+                ),
+                [upper],
+            )
+        )
         points, wheights = np.polynomial.legendre.leggauss(n_eval_per_elem)
-        xi = np.hstack([(b - a)/2*points + (b + a)/2 for a, b in zip(knot_uniq[:-1], knot_uniq[1:])])
-        dxi = np.hstack([(b - a)/2*wheights for a, b in zip(knot_uniq[:-1], knot_uniq[1:])])
+        xi = np.hstack(
+            [
+                (b - a) / 2 * points + (b + a) / 2
+                for a, b in zip(knot_uniq[:-1], knot_uniq[1:])
+            ]
+        )
+        dxi = np.hstack(
+            [(b - a) / 2 * wheights for a, b in zip(knot_uniq[:-1], knot_uniq[1:])]
+        )
         return xi, dxi
-    
+
     def normalize_knots(self):
         """
         Normalize the knot vector to the interval [0, 1].
 
-        Maps the knot vector to the unit interval by applying an affine transformation that 
-        preserves the relative spacing between knots. Updates both the knot vector and span 
+        Maps the knot vector to the unit interval by applying an affine transformation that
+        preserves the relative spacing between knots. Updates both the knot vector and span
         attributes.
 
         Examples
@@ -287,10 +318,10 @@ class BSplineBasis:
         (0, 1)
         """
         a, b = self.span
-        self.knot = (self.knot - a)/(b - a)
+        self.knot = (self.knot - a) / (b - a)
         self.span = (0, 1)
-    
-    def N(self, XI: np.ndarray[np.floating], k: int=0) -> sps.coo_matrix:
+
+    def N(self, XI: np.ndarray[np.floating], k: int = 0) -> sps.coo_matrix:
         """
         Compute the k-th derivative of the B-spline basis functions at specified points.
 
@@ -304,7 +335,7 @@ class BSplineBasis:
         Returns
         -------
         DN : sps.coo_matrix
-            Sparse matrix containing the k-th derivative values. Each row corresponds to an 
+            Sparse matrix containing the k-th derivative values. Each row corresponds to an
             evaluation point, each column to a basis function. Shape is (`XI.size`, `n + 1`).
 
         Notes
@@ -324,33 +355,35 @@ class BSplineBasis:
             [-1.,  0.,  1.],
             [ 0., -2.,  2.]])
         """
-        vals, row, col = _DN(self.p, self.m, self.n, self.knot, np.asarray(XI, dtype=np.float64), k)
+        vals, row, col = _DN(
+            self.p, self.m, self.n, self.knot, np.asarray(XI, dtype=np.float64), k
+        )
         DN = sps.coo_matrix((vals, (row, col)), shape=(XI.size, self.n + 1))
         return DN
-    
+
     def to_dict(self) -> dict:
         """
         Returns a dictionary representation of the BSplineBasis object.
         """
         return {
-            'p': self.p, 
-            'knot': self.knot.tolist(), 
-            'm': self.m, 
-            'n': self.n, 
-            'span': self.span
+            "p": self.p,
+            "knot": self.knot.tolist(),
+            "m": self.m,
+            "n": self.n,
+            "span": self.span,
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> "BSplineBasis":
         """
         Creates a BSplineBasis object from a dictionary representation.
         """
-        this = cls(data['p'], data['knot'])
-        this.m = data['m']
-        this.n = data['n']
-        this.span = data['span']
+        this = cls(data["p"], data["knot"])
+        this.m = data["m"]
+        this.n = data["n"]
+        this.span = data["span"]
         return this
-    
+
     def save(self, filepath: str) -> None:
         """
         Save the BSplineBasis object to a file.
@@ -358,15 +391,17 @@ class BSplineBasis:
         Supported extensions: json, pkl
         """
         data = self.to_dict()
-        ext = filepath.split('.')[-1]
-        if ext == 'json':
-            with open(filepath, 'w') as f:
+        ext = filepath.split(".")[-1]
+        if ext == "json":
+            with open(filepath, "w") as f:
                 json.dump(data, f, indent=2)
-        elif ext == 'pkl':
-            with open(filepath, 'wb') as f:
+        elif ext == "pkl":
+            with open(filepath, "wb") as f:
                 pickle.dump(data, f)
         else:
-            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+            raise ValueError(
+                f"Unknown extension {ext}. Supported extensions: json, pkl."
+            )
 
     @classmethod
     def load(cls, filepath: str) -> "BSplineBasis":
@@ -375,24 +410,26 @@ class BSplineBasis:
         May return control points if the file contains them.
         Supported extensions: json, pkl
         """
-        ext = filepath.split('.')[-1]
-        if ext == 'json':
-            with open(filepath, 'r') as f:
+        ext = filepath.split(".")[-1]
+        if ext == "json":
+            with open(filepath, "r") as f:
                 data = json.load(f)
-        elif ext == 'pkl':
-            with open(filepath, 'rb') as f:
+        elif ext == "pkl":
+            with open(filepath, "rb") as f:
                 data = pickle.load(f)
         else:
-            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+            raise ValueError(
+                f"Unknown extension {ext}. Supported extensions: json, pkl."
+            )
         this = cls.from_dict(data)
         return this
-    
-    def plotN(self, k: int=0, show: bool=True):
+
+    def plotN(self, k: int = 0, show: bool = True):
         """
         Plot the B-spline basis functions or their derivatives over the span.
 
-        Visualizes each basis function N_i(ξ) or its k-th derivative over its support interval 
-        using matplotlib. The plot includes proper LaTeX labels and a legend if there are 10 or 
+        Visualizes each basis function N_i(ξ) or its k-th derivative over its support interval
+        using matplotlib. The plot includes proper LaTeX labels and a legend if there are 10 or
         fewer basis functions.
 
         Parameters
@@ -400,7 +437,7 @@ class BSplineBasis:
         k : int, optional
             Order of derivative to plot. By default, 0 (plots the basis functions themselves).
         show : bool, optional
-            Whether to display the plot immediately. Can be useful to add more stuff to the plot. 
+            Whether to display the plot immediately. Can be useful to add more stuff to the plot.
             By default, True.
 
         Notes
@@ -416,40 +453,54 @@ class BSplineBasis:
         >>> basis.plotN()  # Plot basis functions
         >>> basis.plotN(k=1)  # Plot first derivatives
         """
-        n_eval_per_elem = 500//np.unique(self.knot).size
-        for idx in range(self.n+1):
-            XI = np.empty(0, dtype='float')
-            for i in range(idx, idx+self.p+1):
+        n_eval_per_elem = 500 // np.unique(self.knot).size
+        for idx in range(self.n + 1):
+            XI = np.empty(0, dtype="float")
+            for i in range(idx, idx + self.p + 1):
                 a = self.knot[i]
-                b = self.knot[i+1]
-                if a!=b:
-                    b -= np.finfo('float').eps
+                b = self.knot[i + 1]
+                if a != b:
+                    b -= np.finfo("float").eps
                     XI = np.append(XI, np.linspace(a, b, n_eval_per_elem))
-            DN_idx = np.empty(0, dtype='float')
+            DN_idx = np.empty(0, dtype="float")
             for ind in range(XI.size):
                 DN_idx_ind = _funcDNElemOneXi(idx, self.p, self.knot, XI[ind], k)
                 DN_idx = np.append(DN_idx, DN_idx_ind)
-            label = "$N_{"+str(idx)+"}"+("'"*k)+"(\\xi)$"
+            label = "$N_{" + str(idx) + "}" + ("'" * k) + "(\\xi)$"
             plt.plot(XI, DN_idx, label=label)
         plt.xlabel("$\\xi$")
         unique_knots, counts = np.unique(self.knot, return_counts=True)
-        if unique_knots.size<=10:
+        if unique_knots.size <= 10:
             ylim = plt.ylim()
             y_text = ylim[1] + 0.05 * (ylim[1] - ylim[0])
             id = 0
             for xi, n in zip(unique_knots, counts):
-                plt.axvline(xi, color='gray', linestyle=':', linewidth=0.8)
-                if n==1:
-                    plt.text(xi, y_text, f"$\\xi_{{{id}}}$", ha='center', va='bottom', fontsize=10)
+                plt.axvline(xi, color="gray", linestyle=":", linewidth=0.8)
+                if n == 1:
+                    plt.text(
+                        xi,
+                        y_text,
+                        f"$\\xi_{{{id}}}$",
+                        ha="center",
+                        va="bottom",
+                        fontsize=10,
+                    )
                 else:
-                    plt.text(xi, y_text, f"$\\xi_{{{id}-{id + n - 1}}}$", ha='center', va='bottom', fontsize=10)
+                    plt.text(
+                        xi,
+                        y_text,
+                        f"$\\xi_{{{id}-{id + n - 1}}}$",
+                        ha="center",
+                        va="bottom",
+                        fontsize=10,
+                    )
                 id += n
             plt.ylim(ylim[0], y_text + 0.05 * (ylim[1] - ylim[0]))
-        if self.n+1<=10:
-            plt.legend(loc='best')
+        if self.n + 1 <= 10:
+            plt.legend(loc="best")
         if show:
             plt.show()
-    
+
     def _funcDElem(self, i, j, new_knot, p):
         """
         Compute the ij value of the knot insertion matrix D.
@@ -471,25 +522,27 @@ class BSplineBasis:
             Value of D at the index ij.
 
         """
-        if p==0:
-            return int(new_knot[i]>=self.knot[j] and new_knot[i]<self.knot[j+1])
-        if self.knot[j+p]!=self.knot[j]:
-            rec_p = (new_knot[i+p] - self.knot[j])/(self.knot[j+p] - self.knot[j])
-            rec_p *= self._funcDElem(i, j, new_knot, p-1)
+        if p == 0:
+            return int(new_knot[i] >= self.knot[j] and new_knot[i] < self.knot[j + 1])
+        if self.knot[j + p] != self.knot[j]:
+            rec_p = (new_knot[i + p] - self.knot[j]) / (self.knot[j + p] - self.knot[j])
+            rec_p *= self._funcDElem(i, j, new_knot, p - 1)
         else:
             rec_p = 0
-        if self.knot[j+p+1]!=self.knot[j+1]:
-            rec_j = (self.knot[j+p+1] - new_knot[i+p])/(self.knot[j+p+1] - self.knot[j+1])
-            rec_j *= self._funcDElem(i, j+1, new_knot, p-1)
+        if self.knot[j + p + 1] != self.knot[j + 1]:
+            rec_j = (self.knot[j + p + 1] - new_knot[i + p]) / (
+                self.knot[j + p + 1] - self.knot[j + 1]
+            )
+            rec_j *= self._funcDElem(i, j + 1, new_knot, p - 1)
         else:
             rec_j = 0
         D_ij = rec_p + rec_j
         return D_ij
-    
+
     def _D(self, new_knot):
         """
         Compute the `D` matrix used to determine the position of the new control
-        points for the knot insertion process. The instance of `BSplineBasis` 
+        points for the knot insertion process. The instance of `BSplineBasis`
         won't be modified here.
 
         Parameters
@@ -508,10 +561,10 @@ class BSplineBasis:
         new_n = new_m - self.p - 1
         loop1 = new_n + 1
         loop2 = self.p + 1
-        nb_val_max = loop1*loop2
-        vals = np.empty(nb_val_max, dtype='float')
-        row = np.empty(nb_val_max, dtype='int')
-        col = np.empty(nb_val_max, dtype='int')
+        nb_val_max = loop1 * loop2
+        vals = np.empty(nb_val_max, dtype="float")
+        row = np.empty(nb_val_max, dtype="int")
+        col = np.empty(nb_val_max, dtype="int")
         nb_not_put = 0
         for ind1 in range(loop1):
             sparse_ind1 = ind1
@@ -521,22 +574,22 @@ class BSplineBasis:
             elem = _findElem(self.p, self.m, self.n, self.knot, new_knot_i)
             # determine D_ij(new_knot_i) for the values of j where we know D_ij(new_knot_i) not equal to 0
             for ind2 in range(loop2):
-                sparse_ind2 = sparse_ind1*loop2 + ind2
+                sparse_ind2 = sparse_ind1 * loop2 + ind2
                 j = ind2 + elem - self.p
-                if j<0 or j>elem:
+                if j < 0 or j > elem:
                     nb_not_put += 1
                 else:
                     sparse_ind = sparse_ind2 - nb_not_put
                     vals[sparse_ind] = self._funcDElem(i, j, new_knot, self.p)
                     row[sparse_ind] = i
                     col[sparse_ind] = j
-        if nb_not_put!=0:
+        if nb_not_put != 0:
             vals = vals[:-nb_not_put]
             row = row[:-nb_not_put]
             col = col[:-nb_not_put]
         D = sps.coo_matrix((vals, (row, col)), shape=(new_n + 1, self.n + 1))
         return D
-    
+
     def knotInsertion(self, knots_to_add: np.ndarray[np.floating]) -> sps.coo_matrix:
         """
         Insert knots into the B-spline basis and return the transformation matrix.
@@ -567,19 +620,19 @@ class BSplineBasis:
                [0.2211, 0.5578, 0.2211],
                [0.    , 0.33  , 0.67  ],
                [0.    , 0.    , 1.    ]])
-        
+
         The knot vector is modified (as well as n and m) :
         >>> basis.knot
         array([0.  , 0.  , 0.  , 0.33, 0.67, 1.  , 1.  , 1.  ])
         """
         k = knots_to_add.size
-        new_knot = np.sort(np.concatenate((self.knot, knots_to_add), dtype='float'))
+        new_knot = np.sort(np.concatenate((self.knot, knots_to_add), dtype="float"))
         D = self._D(new_knot)
         self.m += k
         self.n += k
         self.knot = new_knot
         return D
-    
+
     def orderElevation(self, t: int) -> sps.coo_matrix:
         """
         Elevate the polynomial degree of the B-spline basis and return the transformation matrix.
@@ -612,7 +665,7 @@ class BSplineBasis:
                [0.33333333, 0.66666667, 0.        ],
                [0.        , 0.66666667, 0.33333333],
                [0.        , 0.        , 1.        ]])
-        
+
         The knot vector and the degree are modified (as well as n and m) :
         >>> basis.knot
         array([0., 0., 0., 0., 1., 1., 1., 1.])
@@ -636,47 +689,50 @@ class BSplineBasis:
         loop1 = num_bezier
         loop2 = p2 + 1
         loop3 = p1 + 1
-        nb_val_max = loop1*loop2*loop3
-        vals = np.empty(nb_val_max, dtype='float')
-        row = np.empty(nb_val_max, dtype='int')
-        col = np.empty(nb_val_max, dtype='int')
+        nb_val_max = loop1 * loop2 * loop3
+        vals = np.empty(nb_val_max, dtype="float")
+        row = np.empty(nb_val_max, dtype="int")
+        col = np.empty(nb_val_max, dtype="int")
         nb_not_put = 0
         i_offset = 0
         j_offset = 0
         for ind1 in range(loop1):
             sparse_ind1 = ind1
             for ind2 in range(loop2):
-                sparse_ind2 = sparse_ind1*loop2 + ind2
+                sparse_ind2 = sparse_ind1 * loop2 + ind2
                 i = ind2
-                inv_denom = 1/comb(p2, i) # type: ignore
+                inv_denom = 1 / comb(p2, i)  # type: ignore
                 for ind3 in range(loop3):
-                    sparse_ind3 = sparse_ind2*loop3 + ind3
+                    sparse_ind3 = sparse_ind2 * loop3 + ind3
                     j = ind3
-                    if j<(i - t) or j>i:
+                    if j < (i - t) or j > i:
                         nb_not_put += 1
                     else:
                         sparse_ind = sparse_ind3 - nb_not_put
-                        vals[sparse_ind] = comb(p1, j)*comb(t, i-j)*inv_denom # type: ignore
+                        vals[sparse_ind] = comb(p1, j) * comb(t, i - j) * inv_denom  # type: ignore
                         row[sparse_ind] = i_offset + i
                         col[sparse_ind] = j_offset + j
             i_offset += p2 + 1
             j_offset += p1 + 1
-        if nb_not_put!=0:
+        if nb_not_put != 0:
             vals = vals[:-nb_not_put]
             row = row[:-nb_not_put]
             col = col[:-nb_not_put]
-        T = sps.coo_matrix((vals, (row, col)), shape=((p2+1)*num_bezier, (p1+1)*num_bezier))
+        T = sps.coo_matrix(
+            (vals, (row, col)), shape=((p2 + 1) * num_bezier, (p1 + 1) * num_bezier)
+        )
         # step 3 : come back to B-spline by removing useless knots
         self.__init__(p2, knot2)
         S = self._D(knot3)
         self.__init__(p3, knot3)
-        STD = S@T@D
+        STD = S @ T @ D
         return STD
-    
+
     def greville_abscissa(
-        self, 
-        return_weights: bool=False
-        ) -> Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], np.ndarray[np.floating]]]:
+        self, return_weights: bool = False
+    ) -> Union[
+        np.ndarray[np.floating], tuple[np.ndarray[np.floating], np.ndarray[np.floating]]
+    ]:
         r"""
         Compute the Greville abscissa and optionally their weights for this 1D B-spline basis.
 
@@ -723,13 +779,17 @@ class BSplineBasis:
         >>> weight
         array([0.5, 1. , 1. , 0.5])
         """
-        greville = np.convolve(self.knot[1:-1], np.ones(self.p, dtype=int), 'valid')/self.p
+        greville = (
+            np.convolve(self.knot[1:-1], np.ones(self.p, dtype=int), "valid") / self.p
+        )
         if return_weights:
-            weight = self.knot[(self.p+1):] - self.knot[:-(self.p+1)]
+            weight = self.knot[(self.p + 1) :] - self.knot[: -(self.p + 1)]
             return greville, weight
         return greville
 
+
 # %% fast functions for evaluation
+
 
 @nb.njit(nb.float64(nb.int64, nb.int64, nb.float64[:], nb.float64), cache=True)
 def _funcNElemOneXi(i, p, knot, xi):
@@ -753,26 +813,31 @@ def _funcNElemOneXi(i, p, knot, xi):
         Value of the BSpline basis function N_i^p(xi).
 
     """
-    if p==0:
-        return int((xi>=knot[i] and xi<knot[i+1]) 
-                    or (knot[i+1]==knot[-1] and xi==knot[i+1]))
-    if knot[i+p]!=knot[i]:
-        rec_p = (xi - knot[i])/(knot[i+p] - knot[i])
-        rec_p *= _funcNElemOneXi(i, p-1, knot, xi)
+    if p == 0:
+        return int(
+            (xi >= knot[i] and xi < knot[i + 1])
+            or (knot[i + 1] == knot[-1] and xi == knot[i + 1])
+        )
+    if knot[i + p] != knot[i]:
+        rec_p = (xi - knot[i]) / (knot[i + p] - knot[i])
+        rec_p *= _funcNElemOneXi(i, p - 1, knot, xi)
     else:
         rec_p = 0
-    if knot[i+p+1]!=knot[i+1]:
-        rec_i = (knot[i+p+1] - xi)/(knot[i+p+1] - knot[i+1])
-        rec_i *= _funcNElemOneXi(i+1, p-1, knot, xi)
+    if knot[i + p + 1] != knot[i + 1]:
+        rec_i = (knot[i + p + 1] - xi) / (knot[i + p + 1] - knot[i + 1])
+        rec_i *= _funcNElemOneXi(i + 1, p - 1, knot, xi)
     else:
         rec_i = 0
     N_i = rec_p + rec_i
     return N_i
 
-@nb.njit(nb.float64(nb.int64, nb.int64, nb.float64[:], nb.float64, nb.int64), cache=True)
+
+@nb.njit(
+    nb.float64(nb.int64, nb.int64, nb.float64[:], nb.float64, nb.int64), cache=True
+)
 def _funcDNElemOneXi(i, p, knot, xi, k):
     """
-    Evaluate the `k`-th derivative of the basis function N_i^p(xi) of the 
+    Evaluate the `k`-th derivative of the basis function N_i^p(xi) of the
     BSpline.
 
     Parameters
@@ -791,39 +856,44 @@ def _funcDNElemOneXi(i, p, knot, xi, k):
     Raises
     ------
     ValueError
-        Can't compute the `k`-th derivative of a B-spline of degree strictly 
+        Can't compute the `k`-th derivative of a B-spline of degree strictly
         less than `k` or if `k`<0.
 
     Returns
     -------
     DN_i : float
-        Value of the `k`-th derivative of the BSpline basis function 
+        Value of the `k`-th derivative of the BSpline basis function
         N_i^p(xi).
 
     """
-    if k==0:
+    if k == 0:
         return _funcNElemOneXi(i, p, knot, xi)
-    if p==0:
-        if k>=0:
-            raise ValueError("Impossible to determine the k-th derivative of a B-spline of degree strictly less than k !")
-        raise ValueError("Impossible to determine the k-th derivative of a B-spline if k<0 !")
-    if knot[i+p]!=knot[i]:
-        rec_p = p/(knot[i+p] - knot[i])
-        rec_p *= _funcDNElemOneXi(i, p-1, knot, xi, k-1)
+    if p == 0:
+        if k >= 0:
+            raise ValueError(
+                "Impossible to determine the k-th derivative of a B-spline of degree strictly less than k !"
+            )
+        raise ValueError(
+            "Impossible to determine the k-th derivative of a B-spline if k<0 !"
+        )
+    if knot[i + p] != knot[i]:
+        rec_p = p / (knot[i + p] - knot[i])
+        rec_p *= _funcDNElemOneXi(i, p - 1, knot, xi, k - 1)
     else:
         rec_p = 0
-    if knot[i+p+1]!=knot[i+1]:
-        rec_i = p/(knot[i+p+1] - knot[i+1])
-        rec_i *= _funcDNElemOneXi(i+1, p-1, knot, xi, k-1)
+    if knot[i + p + 1] != knot[i + 1]:
+        rec_i = p / (knot[i + p + 1] - knot[i + 1])
+        rec_i *= _funcDNElemOneXi(i + 1, p - 1, knot, xi, k - 1)
     else:
         rec_i = 0
     N_i = rec_p - rec_i
     return N_i
 
+
 @nb.njit(nb.int64(nb.int64, nb.int64, nb.int64, nb.float64[:], nb.float64), cache=True)
 def _findElem(p, m, n, knot, xi):
     """
-    Find `i` so that `xi` belongs to 
+    Find `i` so that `xi` belongs to
     [ `knot`[`i`], `knot`[`i` + 1] [.
 
     Parameters
@@ -842,7 +912,7 @@ def _findElem(p, m, n, knot, xi):
     Raises
     ------
     ValueError
-        If the value of `xi` is outside the definition interval 
+        If the value of `xi` is outside the definition interval
         of the spline.
 
     Returns
@@ -851,12 +921,12 @@ def _findElem(p, m, n, knot, xi):
         Index of the first knot of the interval in which `xi` is bounded.
 
     """
-    if xi==knot[m - p]:
+    if xi == knot[m - p]:
         return n
     i = 0
     pastrouve = True
-    while i<=n and pastrouve:
-        pastrouve = xi<knot[i] or xi>=knot[i+1]
+    while i <= n and pastrouve:
+        pastrouve = xi < knot[i] or xi >= knot[i + 1]
         i += 1
     if pastrouve:
         raise ValueError("xi is outside the definition interval of the spline !")
@@ -865,11 +935,16 @@ def _findElem(p, m, n, knot, xi):
     i -= 1
     return i
 
-@nb.njit(nb.types.UniTuple.from_types((nb.float64[:], nb.int64[:], nb.int64[:]))(nb.int64, nb.int64, nb.int64, nb.float64[:], nb.float64[:], nb.int64), 
-         cache=True)
+
+@nb.njit(
+    nb.types.UniTuple.from_types((nb.float64[:], nb.int64[:], nb.int64[:]))(
+        nb.int64, nb.int64, nb.int64, nb.float64[:], nb.float64[:], nb.int64
+    ),
+    cache=True,
+)
 def _DN(p, m, n, knot, XI, k):
     """
-    Compute the `k`-th derivative of the BSpline basis functions for a set 
+    Compute the `k`-th derivative of the BSpline basis functions for a set
     of values in the parametric space.
 
     Parameters
@@ -890,18 +965,18 @@ def _DN(p, m, n, knot, XI, k):
     Returns
     -------
     (vals, row, col) : (numpy.array of float, numpy.array of int, numpy.array of int)
-        Values and indices of the `k`-th derivative matrix of the BSpline 
+        Values and indices of the `k`-th derivative matrix of the BSpline
         basis functions in the columns for each value of `XI` in the rows.
 
     """
     loop1 = XI.size
     loop2 = p + 1
-    nb_val_max = loop1*loop2
-    vals = np.empty(nb_val_max, dtype='float')
-    row = np.empty(nb_val_max, dtype='int')
-    col = np.empty(nb_val_max, dtype='int')
+    nb_val_max = loop1 * loop2
+    vals = np.empty(nb_val_max, dtype="float")
+    row = np.empty(nb_val_max, dtype="int")
+    col = np.empty(nb_val_max, dtype="int")
     nb_not_put = 0
-    for ind1 in range(loop1):#nb.p
+    for ind1 in range(loop1):  # nb.p
         sparse_ind1 = ind1
         i_xi = ind1
         xi = XI.flat[i_xi]
@@ -909,16 +984,16 @@ def _DN(p, m, n, knot, XI, k):
         elem = _findElem(p, m, n, knot, xi)
         # determine DN_i(\xi) for the values of i where we know DN_i(\xi) not equal to 0
         for ind2 in range(loop2):
-            sparse_ind2 = sparse_ind1*loop2 + ind2
+            sparse_ind2 = sparse_ind1 * loop2 + ind2
             i = ind2 + elem - p
-            if i<0:
+            if i < 0:
                 nb_not_put += 1
             else:
                 sparse_ind = sparse_ind2 - nb_not_put
                 vals[sparse_ind] = _funcDNElemOneXi(i, p, knot, xi, k)
                 row[sparse_ind] = i_xi
                 col[sparse_ind] = i
-    if nb_not_put!=0:
+    if nb_not_put != 0:
         vals = vals[:-nb_not_put]
         row = row[:-nb_not_put]
         col = col[:-nb_not_put]

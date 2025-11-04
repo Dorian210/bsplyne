@@ -1,10 +1,10 @@
-
 import numpy as np
 import meshio as io
 from typing import Iterable
 from functools import reduce
 import os
 import xml
+
 
 def writePVD(fileName: str, groups: dict[str, dict]):
     """
@@ -31,7 +31,7 @@ def writePVD(fileName: str, groups: dict[str, dict]):
     -------
     None
     """
-    rep,fname=os.path.split(fileName)
+    rep, fname = os.path.split(fileName)
     pvd = xml.dom.minidom.Document()
     pvd_root = pvd.createElementNS("VTK", "VTKFile")
     pvd_root.setAttribute("type", "Collection")
@@ -39,7 +39,7 @@ def writePVD(fileName: str, groups: dict[str, dict]):
     pvd_root.setAttribute("byte_order", "LittleEndian")
     pvd.appendChild(pvd_root)
     collection = pvd.createElementNS("VTK", "Collection")
-    pvd_root.appendChild(collection)    
+    pvd_root.appendChild(collection)
     for name, grp in groups.items():
         for jp in range(grp["npart"]):
             for js in range(grp["nstep"]):
@@ -50,9 +50,9 @@ def writePVD(fileName: str, groups: dict[str, dict]):
                 dataSet.setAttribute("file", f"{fname}_{name}_{jp}_{js}.{grp['ext']}")
                 dataSet.setAttribute("name", f"{name}_{jp}")
                 collection.appendChild(dataSet)
-    outFile = open(fileName+".pvd", 'w')
-    pvd.writexml(outFile, newl='\n')
-    print("VTK: "+ fileName +".pvd written")
+    outFile = open(fileName + ".pvd", "w")
+    pvd.writexml(outFile, newl="\n")
+    print("VTK: " + fileName + ".pvd written")
     outFile.close()
 
 
@@ -68,7 +68,7 @@ def merge_meshes(meshes: Iterable[io.Mesh]) -> io.Mesh:
     Returns
     -------
     io.Mesh
-        A single meshio.Mesh object containing the merged meshes with combined 
+        A single meshio.Mesh object containing the merged meshes with combined
         vertices, cells and point data.
     """
     vertices = np.vstack([m.points for m in meshes])
@@ -87,7 +87,7 @@ def merge_meshes(meshes: Iterable[io.Mesh]) -> io.Mesh:
     for point_data_name in point_data_names:
         for m in meshes:
             if point_data_name in m.point_data:
-                shape = m.point_data[point_data_name].shape[1:] # type: ignore
+                shape = m.point_data[point_data_name].shape[1:]  # type: ignore
                 break
         point_data = []
         for m in meshes:
@@ -98,7 +98,10 @@ def merge_meshes(meshes: Iterable[io.Mesh]) -> io.Mesh:
         point_datas[point_data_name] = np.concatenate(point_data, axis=0)
     return io.Mesh(vertices, cells, point_data=point_datas)
 
-def merge_saves(path: str, name: str, nb_patchs: int, nb_steps: int, group_names: list[str]) -> None:
+
+def merge_saves(
+    path: str, name: str, nb_patchs: int, nb_steps: int, group_names: list[str]
+) -> None:
     """
     Merge multiple mesh files and save the merged results.
 
@@ -129,5 +132,10 @@ def merge_saves(path: str, name: str, nb_patchs: int, nb_steps: int, group_names
     for group_name in group_names:
         groups[group_name] = {"ext": "vtu", "npart": 1, "nstep": nb_steps}
         for step in range(nb_steps):
-            merge_meshes([io.read(f"{filename}_{group_name}_{p}_{step}.vtu") for p in range(nb_patchs)]).write(f"{filename_out}_{group_name}_0_{step}.vtu")
+            merge_meshes(
+                [
+                    io.read(f"{filename}_{group_name}_{p}_{step}.vtu")
+                    for p in range(nb_patchs)
+                ]
+            ).write(f"{filename_out}_{group_name}_0_{step}.vtu")
     writePVD(filename_out, groups)

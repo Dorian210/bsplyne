@@ -15,9 +15,11 @@ from bsplyne.save_utils import writePVD
 _can_visualize_pyvista = False
 try:
     import pyvista as pv
+
     _can_visualize_pyvista = True
 except ImportError:
     pass
+
 
 class BSpline:
     """
@@ -46,10 +48,13 @@ class BSpline:
     `numpy.ndarray` : Array type used for control points and evaluations
     `scipy.sparse` : Sparse matrix formats used for basis function evaluations
     """
+
     NPa: int
     bases: np.ndarray[BSplineBasis]
-    
-    def __init__(self, degrees: Iterable[int], knots: Iterable[np.ndarray[np.floating]]):
+
+    def __init__(
+        self, degrees: Iterable[int], knots: Iterable[np.ndarray[np.floating]]
+    ):
         """
         Initialize a `BSpline` instance with specified degrees and knot vectors.
 
@@ -94,18 +99,18 @@ class BSpline:
         >>> curve = BSpline(degree, knot)
         """
         self.NPa = len(degrees)
-        self.bases = np.empty(self.NPa, dtype='object')
+        self.bases = np.empty(self.NPa, dtype="object")
         for idx in range(self.NPa):
             p = degrees[idx]
             knot = knots[idx]
             self.bases[idx] = BSplineBasis(p, knot)
-    
+
     @classmethod
     def from_bases(cls, bases: Iterable[BSplineBasis]) -> "BSpline":
         """
         Create a BSpline instance from an array of `BSplineBasis` objects.
-        This is an alternative constructor that allows direct initialization from 
-        existing basis functions rather than creating new ones from degrees and knot 
+        This is an alternative constructor that allows direct initialization from
+        existing basis functions rather than creating new ones from degrees and knot
         vectors.
 
         Parameters
@@ -134,10 +139,10 @@ class BSpline:
         """
         self = cls([], [])
         self.NPa = len(bases)
-        self.bases = np.empty(self.NPa, dtype='object')
+        self.bases = np.empty(self.NPa, dtype="object")
         self.bases[:] = bases
         return self
-    
+
     def getDegrees(self) -> np.ndarray[np.integer]:
         """
         Returns the polynomial degree of each basis function in the isoparametric space.
@@ -159,15 +164,15 @@ class BSpline:
         Examples
         --------
         >>> degrees = np.array([2, 2], dtype='int')
-        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'), 
+        >>> knots = [np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float'),
         ...          np.array([0, 0, 0, 0.5, 1, 1, 1], dtype='float')]
         >>> spline = BSpline(degrees, knots)
         >>> spline.getDegrees()
         array([2, 2])
         """
-        degrees = np.array([basis.p for basis in self.bases], dtype='int')
+        degrees = np.array([basis.p for basis in self.bases], dtype="int")
         return degrees
-    
+
     def getKnots(self) -> list[np.ndarray[np.floating]]:
         """
         Returns the knot vector of each basis function in the isoparametric space.
@@ -203,14 +208,14 @@ class BSpline:
         """
         knots = [basis.knot for basis in self.bases]
         return knots
-    
+
     def getCtrlShape(self) -> tuple[int]:
         """
         Get the shape of the control grid (number of control points per dimension).
 
-        This method returns a tuple giving, for each isoparametric direction, 
-        the number of control points associated with the corresponding B-spline basis. 
-        In each dimension, this number is equal to `n + 1`, where `n` is the highest 
+        This method returns a tuple giving, for each isoparametric direction,
+        the number of control points associated with the corresponding B-spline basis.
+        In each dimension, this number is equal to `n + 1`, where `n` is the highest
         basis function index.
 
         Returns
@@ -223,7 +228,7 @@ class BSpline:
         - For a curve (1D), returns a single integer (`n1 + 1`,)
         - For a surface (2D), returns (`n1 + 1`, `n2 + 1`)
         - For a volume (3D), returns (`n1 + 1`, `n2 + 1`, `n3 + 1`)
-        - The product of these values gives the total number of control points, 
+        - The product of these values gives the total number of control points,
         identical to the number of basis functions (`getNbFunc()`).
 
         Examples
@@ -304,27 +309,29 @@ class BSpline:
         """
         spans = [basis.span for basis in self.bases]
         return spans
-    
-#     def get_indices(self, begining=0):
-#         """
-#         Create an array containing the indices of the control points of 
-#         the B-spline.
-# 
-#         Parameters
-#         ----------
-#         begining : int, optional
-#             First index of the arrayof indices, by default 0
-# 
-#         Returns
-#         -------
-#         indices : np.array of int
-#             Indices of the control points in the same shape as the 
-#             control points.
-#         """
-#         indices = np.arange(begining, begining + self.ctrl_pts.size).reshape(self.ctrl_pts.shape)
-#         return indices
 
-    def linspace(self, n_eval_per_elem: Union[int, Iterable[int]]=10) -> tuple[np.ndarray[np.floating], ...]:
+    #     def get_indices(self, begining=0):
+    #         """
+    #         Create an array containing the indices of the control points of
+    #         the B-spline.
+    #
+    #         Parameters
+    #         ----------
+    #         begining : int, optional
+    #             First index of the arrayof indices, by default 0
+    #
+    #         Returns
+    #         -------
+    #         indices : np.array of int
+    #             Indices of the control points in the same shape as the
+    #             control points.
+    #         """
+    #         indices = np.arange(begining, begining + self.ctrl_pts.size).reshape(self.ctrl_pts.shape)
+    #         return indices
+
+    def linspace(
+        self, n_eval_per_elem: Union[int, Iterable[int]] = 10
+    ) -> tuple[np.ndarray[np.floating], ...]:
         """
         Generate sets of evaluation points over the span of each basis in the isoparametric space.
 
@@ -366,15 +373,17 @@ class BSpline:
         array([0. , 0.5, 1. ])
         """
         if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
-        XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)]) # type: ignore
+            n_eval_per_elem = [n_eval_per_elem] * self.NPa  # type: ignore
+        XI = tuple([basis.linspace(n) for basis, n in zip(self.bases, n_eval_per_elem)])  # type: ignore
         return XI
 
     def linspace_for_integration(
-        self, 
-        n_eval_per_elem: Union[int, Iterable[int]]=10, 
-        bounding_box: Union[Iterable, None]=None
-        ) -> tuple[tuple[np.ndarray[np.floating], ...], tuple[np.ndarray[np.floating], ...]]:
+        self,
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        bounding_box: Union[Iterable, None] = None,
+    ) -> tuple[
+        tuple[np.ndarray[np.floating], ...], tuple[np.ndarray[np.floating], ...]
+    ]:
         """
         Generate sets of evaluation points and their integration weights over each basis span.
 
@@ -410,7 +419,7 @@ class BSpline:
         -----
         - For a curve (1D), returns ((`xi` points), (`xi` weights))
         - For a surface (2D), returns ((`xi` points, `eta` points), (`xi` weights, `eta` weights))
-        - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points), 
+        - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points),
                                     (`xi` weights, `eta` weights, `zeta` weights))
         - The points are centered in their integration intervals
         - The weights represent the size of the integration intervals
@@ -428,24 +437,26 @@ class BSpline:
         array([0.25, 0.25, 0.25, 0.25])
         """
         if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
+            n_eval_per_elem = [n_eval_per_elem] * self.NPa  # type: ignore
         if bounding_box is None:
-            bounding_box = [b.span for b in self.bases] # type: ignore
+            bounding_box = [b.span for b in self.bases]  # type: ignore
         XI = []
         dXI = []
-        for basis, (n, bb) in zip(self.bases, zip(n_eval_per_elem, bounding_box)): # type: ignore
+        for basis, (n, bb) in zip(self.bases, zip(n_eval_per_elem, bounding_box)):  # type: ignore
             xi, dxi = basis.linspace_for_integration(n, bb)
             XI.append(xi)
             dXI.append(dxi)
         XI = tuple(XI)
         dXI = tuple(dXI)
         return XI, dXI
-    
+
     def gauss_legendre_for_integration(
-        self, 
-        n_eval_per_elem: Union[int, Iterable[int], None]=None, 
-        bounding_box: Union[Iterable, None]=None
-        ) -> tuple[tuple[np.ndarray[np.floating], ...], tuple[np.ndarray[np.floating], ...]]:
+        self,
+        n_eval_per_elem: Union[int, Iterable[int], None] = None,
+        bounding_box: Union[Iterable, None] = None,
+    ) -> tuple[
+        tuple[np.ndarray[np.floating], ...], tuple[np.ndarray[np.floating], ...]
+    ]:
         """
         Generate sets of evaluation points and their Gauss-Legendre integration weights over each basis span.
 
@@ -483,7 +494,7 @@ class BSpline:
         -----
         - For a curve (1D), returns ((`xi` points), (`xi` weights))
         - For a surface (2D), returns ((`xi` points, `eta` points), (`xi` weights, `eta` weights))
-        - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points), 
+        - For a volume (3D), returns ((`xi` points, `eta` points, `zeta` points),
                                     (`xi` weights, `eta` weights, `zeta` weights))
         - The points and weights follow the Gauss-Legendre quadrature rule
         - When `n_eval_per_elem` is `None`, uses `p//2 + 1` points per element for exact
@@ -502,21 +513,21 @@ class BSpline:
         array([0.25, 0.25, 0.25, 0.25])
         """
         if n_eval_per_elem is None:
-            n_eval_per_elem = self.getDegrees()//2 + 1
+            n_eval_per_elem = self.getDegrees() // 2 + 1
         if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa # type: ignore
+            n_eval_per_elem = [n_eval_per_elem] * self.NPa  # type: ignore
         if bounding_box is None:
-            bounding_box = [None]*self.NPa # type: ignore
+            bounding_box = [None] * self.NPa  # type: ignore
         XI = []
         dXI = []
-        for basis, (n_eval_per_elem_axis, bb) in zip(self.bases, zip(n_eval_per_elem, bounding_box)): # type: ignore
+        for basis, (n_eval_per_elem_axis, bb) in zip(self.bases, zip(n_eval_per_elem, bounding_box)):  # type: ignore
             xi, dxi = basis.gauss_legendre_for_integration(n_eval_per_elem_axis, bb)
             XI.append(xi)
             dXI.append(dxi)
         XI = tuple(XI)
         dXI = tuple(dXI)
         return XI, dXI
-    
+
     def normalize_knots(self):
         """
         Maps all knot vectors to the interval [0, 1] in each isoparametric dimension.
@@ -548,12 +559,12 @@ class BSpline:
         """
         for basis in self.bases:
             basis.normalize_knots()
-    
+
     def DN(
-        self, 
-        XI: Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]], 
-        k: Union[int, Iterable[int]]=0
-        ) -> Union[sps.spmatrix, np.ndarray[sps.spmatrix]]:
+        self,
+        XI: Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]],
+        k: Union[int, Iterable[int]] = 0,
+    ) -> Union[sps.spmatrix, np.ndarray[sps.spmatrix]]:
         """
         Compute the `k`-th derivative of the B-spline basis at given points in the isoparametric space.
 
@@ -585,7 +596,7 @@ class BSpline:
         -------
         DN : Union[sps.spmatrix, np.ndarray[sps.spmatrix]]
             Sparse matrix or array of sparse matrices containing the basis evaluations:
-            - If `k` is a `list` or is 0: Returns a single sparse matrix containing the mixed 
+            - If `k` is a `list` or is 0: Returns a single sparse matrix containing the mixed
             derivative specified by the list.
             - If `k` is an `int` > 0: Returns an array of sparse matrices with shape [`NPa`]*`k`.
             For example, if `k=1`, returns `NPa` matrices containing derivatives along each axis.
@@ -641,35 +652,35 @@ class BSpline:
                [ 0.,  0.,  0.,  0.,  8.,-8.,  0., 0.,-8., 8., 0., 0., 0., 0., 0., 0.],
                [ 0.,  0.,  0.,  0.,  0., 0.,  8.,-8., 0.,-0.,-8., 8., 0., 0., 0., 0.]])
         """
-        
+
         if isinstance(XI, np.ndarray):
             fct = my_wide_product
             XI = XI.reshape((self.NPa, -1))
         else:
             fct = sps.kron
-        
+
         if isinstance(k, int):
-            if k==0:
-                k = [0]*self.NPa # type: ignore
-        
+            if k == 0:
+                k = [0] * self.NPa  # type: ignore
+
         if isinstance(k, int):
-            dkbasis_dxik = np.empty((self.NPa, k + 1), dtype='object')
+            dkbasis_dxik = np.empty((self.NPa, k + 1), dtype="object")
             for idx in range(self.NPa):
                 basis = self.bases[idx]
-                xi = XI[idx] - np.finfo('float').eps * (XI[idx]==basis.knot[-1])
+                xi = XI[idx] - np.finfo("float").eps * (XI[idx] == basis.knot[-1])
                 for k_querry in range(k + 1):
                     dkbasis_dxik[idx, k_querry] = basis.N(xi, k=k_querry)
-            DN = np.empty([self.NPa]*k, dtype='object')
+            DN = np.empty([self.NPa] * k, dtype="object")
             dic = {}
             for axes in np.ndindex(*DN.shape):
                 u, c = np.unique(axes, return_counts=True)
-                k_arr = np.zeros(self.NPa, dtype='int')
+                k_arr = np.zeros(self.NPa, dtype="int")
                 k_arr[u] = c
                 key = tuple(k_arr)
                 if key not in dic:
                     for idx in range(self.NPa):
                         k_querry = k_arr[idx]
-                        if idx==0:
+                        if idx == 0:
                             dic[key] = dkbasis_dxik[idx, k_querry]
                         else:
                             dic[key] = fct(dic[key], dkbasis_dxik[idx, k_querry])
@@ -679,20 +690,20 @@ class BSpline:
             for idx in range(self.NPa):
                 basis = self.bases[idx]
                 k_idx = k[idx]
-                xi = XI[idx] - np.finfo('float').eps * (XI[idx]==basis.knot[-1])
+                xi = XI[idx] - np.finfo("float").eps * (XI[idx] == basis.knot[-1])
                 DN_elem = basis.N(xi, k=k_idx)
-                if idx==0:
+                if idx == 0:
                     DN = DN_elem
                 else:
                     DN = fct(DN, DN_elem)
             return DN
-    
+
     def __call__(
-        self, 
-        ctrl_pts: np.ndarray[np.floating], 
-        XI: Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]], 
-        k: Union[int, Iterable[int]]=0
-        ) -> np.ndarray[np.floating]:
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        XI: Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]],
+        k: Union[int, Iterable[int]] = 0,
+    ) -> np.ndarray[np.floating]:
         """
         Evaluate the `k`-th derivative of the B-spline at given points in the isoparametric space.
 
@@ -705,7 +716,7 @@ class BSpline:
             Control points defining the B-spline geometry.
             Shape: (`NPh`, n1, n2, ...) where:
             - `NPh` is the dimension of the physical space
-            - ni is the number of control points in the i-th isoparametric dimension, 
+            - ni is the number of control points in the i-th isoparametric dimension,
             i.e. the number of basis functions on this isoparametric axis
 
         XI : Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]]
@@ -781,18 +792,20 @@ class BSpline:
         DN = self.DN(XI, k)
         NPh = ctrl_pts.shape[0]
         if isinstance(DN, np.ndarray):
-            values = np.empty((*DN.shape, NPh, *XI_shape), dtype='float')
+            values = np.empty((*DN.shape, NPh, *XI_shape), dtype="float")
             for axes in np.ndindex(*DN.shape):
-                values[axes] = (DN[axes] @ ctrl_pts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
+                values[axes] = (DN[axes] @ ctrl_pts.reshape((NPh, -1)).T).T.reshape(
+                    (NPh, *XI_shape)
+                )
         else:
             values = (DN @ ctrl_pts.reshape((NPh, -1)).T).T.reshape((NPh, *XI_shape))
         return values
-    
+
     def knotInsertion(
-        self, 
-        ctrl_pts: Union[np.ndarray[np.floating], None], 
-        knots_to_add: Iterable[Union[np.ndarray[np.float64], int]]
-        ) -> np.ndarray[np.floating]:
+        self,
+        ctrl_pts: Union[np.ndarray[np.floating], None],
+        knots_to_add: Iterable[Union[np.ndarray[np.float64], int]],
+    ) -> np.ndarray[np.floating]:
         """
         Add knots to the B-spline while preserving its geometry.
 
@@ -807,7 +820,7 @@ class BSpline:
             Shape: (`NPh`, n1, n2, ...) where:
             - `NPh` is the dimension of the physical space
             - ni is the number of control points in the i-th isoparametric dimension
-            If None is passed, the knot insertion is performed on the basis functions 
+            If None is passed, the knot insertion is performed on the basis functions
             but not on the control points.
 
         knots_to_add : Iterable[Union[np.ndarray[np.floating], int]]
@@ -860,21 +873,23 @@ class BSpline:
         """
         true_knots_to_add = []
         for axis, knots_to_add_elem in enumerate(knots_to_add):
-            if isinstance(knots_to_add_elem, int): # It is a number of knots to add in each element
+            if isinstance(
+                knots_to_add_elem, int
+            ):  # It is a number of knots to add in each element
                 u_knot = np.unique(self.bases[axis].knot)
                 a, b = u_knot[:-1, None], u_knot[1:, None]
                 mu = np.linspace(0, 1, knots_to_add_elem + 1, endpoint=False)[None, 1:]
-                true_knots_to_add.append((a + (b - a)*mu).ravel())
+                true_knots_to_add.append((a + (b - a) * mu).ravel())
             else:
                 true_knots_to_add.append(knots_to_add_elem)
         knots_to_add = true_knots_to_add
-        
+
         if ctrl_pts is None:
             for basis, knots_to_add_elem in zip(self.bases, knots_to_add):
                 basis.knotInsertion(knots_to_add_elem)
             return None
-        
-        pts_shape = np.empty(self.NPa, dtype='int')
+
+        pts_shape = np.empty(self.NPa, dtype="int")
         D = None
         for idx in range(self.NPa):
             basis = self.bases[idx]
@@ -889,12 +904,10 @@ class BSpline:
         pts = (D @ ctrl_pts.reshape((NPh, -1)).T).T
         ctrl_pts = pts.reshape((NPh, *pts_shape))
         return ctrl_pts
-    
+
     def orderElevation(
-        self, 
-        ctrl_pts: Union[np.ndarray[np.floating], None], 
-        t: Iterable[int]
-        ) -> np.ndarray[np.floating]:
+        self, ctrl_pts: Union[np.ndarray[np.floating], None], t: Iterable[int]
+    ) -> np.ndarray[np.floating]:
         """
         Elevate the polynomial degree of the B-spline while preserving its geometry.
 
@@ -910,7 +923,7 @@ class BSpline:
             Shape: (`NPh`, n1, n2, ...) where:
             - `NPh` is the dimension of the physical space
             - ni is the number of control points in the i-th isoparametric dimension
-            If None is passed, the order elevation is performed on the basis functions 
+            If None is passed, the order elevation is performed on the basis functions
             but not on the control points.
 
         t : Iterable[int]
@@ -928,7 +941,7 @@ class BSpline:
         Notes
         -----
         - Order elevation preserves the geometry and parameterization of the B-spline
-        - The number of new control points depends on the current degree and number of 
+        - The number of new control points depends on the current degree and number of
         elements
         - The method modifies the `BSpline` object by updating its basis functions
         - This operation is more computationally expensive than knot insertion
@@ -954,8 +967,8 @@ class BSpline:
             for basis, t_basis in zip(self.bases, t):
                 basis.orderElevation(t_basis)
             return None
-        
-        pts_shape = np.empty(self.NPa, dtype='int')
+
+        pts_shape = np.empty(self.NPa, dtype="int")
         STD = None
         for idx in range(self.NPa):
             basis = self.bases[idx]
@@ -970,15 +983,15 @@ class BSpline:
         pts = (STD @ ctrl_pts.reshape((NPh, -1)).T).T
         ctrl_pts = pts.reshape((NPh, *pts_shape))
         return ctrl_pts
-    
-    def greville_abscissa(
-        self, 
-        return_weights: bool=False
-        ) -> Union[list[np.ndarray[np.floating]], tuple[list[np.ndarray[np.floating]], list[np.ndarray[np.floating]]]]:
+
+    def greville_abscissa(self, return_weights: bool = False) -> Union[
+        list[np.ndarray[np.floating]],
+        tuple[list[np.ndarray[np.floating]], list[np.ndarray[np.floating]]],
+    ]:
         """
         Compute the Greville abscissa and optionally their weights for each isoparametric dimension.
 
-        The Greville abscissa can be interpreted as the "position" of the control points in the 
+        The Greville abscissa can be interpreted as the "position" of the control points in the
         isoparametric space. They are often used as interpolation points for B-splines.
 
         Parameters
@@ -1027,7 +1040,10 @@ class BSpline:
         >>> weights[0]  # weights for xi direction
         array([0.5, 1. , 1. , 0.5])
         """
-        res = [basis.greville_abscissa(return_weights=return_weights) for basis in self.bases]
+        res = [
+            basis.greville_abscissa(return_weights=return_weights)
+            for basis in self.bases
+        ]
         if return_weights:
             greville, weights = zip(*res)
             greville = list(greville)
@@ -1036,27 +1052,29 @@ class BSpline:
         else:
             greville = list(res)
             return greville
-    
-    def make_control_poly_meshes(self, 
-                                 ctrl_pts: np.ndarray[np.floating], 
-                                 n_eval_per_elem: Union[int, Iterable[int]]=10, 
-                                 n_step: int=1, 
-                                 fields: dict={}, 
-                                 XI: Union[None, tuple[np.ndarray[np.floating], ...]]=None, 
-                                 paraview_sizes: dict={}) -> list[io.Mesh]:
+
+    def make_control_poly_meshes(
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        n_step: int = 1,
+        fields: dict = {},
+        XI: Union[None, tuple[np.ndarray[np.floating], ...]] = None,
+        paraview_sizes: dict = {},
+    ) -> list[io.Mesh]:
         """
         Create meshes containing all the data needed to plot the control polygon of the B-spline.
 
-        This method generates a list of `io.Mesh` objects representing the control mesh 
-        (polygonal connectivity) of the B-spline, suitable for visualization (e.g. in Paraview). 
+        This method generates a list of `io.Mesh` objects representing the control mesh
+        (polygonal connectivity) of the B-spline, suitable for visualization (e.g. in Paraview).
         It supports time-dependent fields and arbitrary dimension.
 
         Parameters
         ----------
         ctrl_pts : np.ndarray[np.floating]
-            Array of control points of the B-spline, with shape 
-            (`NPh`, number of elements for dim 1, ..., number of elements for dim `NPa`), 
-            where `NPh` is the physical space dimension and `NPa` is the dimension of the 
+            Array of control points of the B-spline, with shape
+            (`NPh`, number of elements for dim 1, ..., number of elements for dim `NPa`),
+            where `NPh` is the physical space dimension and `NPa` is the dimension of the
             isoparametric space.
         n_step : int, optional
             Number of time steps to plot. By default, 1.
@@ -1088,13 +1106,13 @@ class BSpline:
         Returns
         -------
         list[io.Mesh]
-            List of `io.Mesh` objects, one for each time step, containing the control mesh geometry 
+            List of `io.Mesh` objects, one for each time step, containing the control mesh geometry
             and associated fields.
 
         Notes
         -----
         - The control mesh is constructed by connecting control points along each isoparametric direction.
-        - Fields can be provided either as functions evaluated at the Greville abscissae, or as arrays defined on the 
+        - Fields can be provided either as functions evaluated at the Greville abscissae, or as arrays defined on the
         control points or on a regular parametric grid (in which case they are interpolated at the Greville abscissae).
         - The first axis of the field array or function output corresponds to the time step, even if there is only one.
         - The method is compatible with B-splines of arbitrary dimension.
@@ -1115,17 +1133,23 @@ class BSpline:
         shape = [xi.size for xi in XI]
         NXI = np.prod(shape)
         NPh = ctrl_pts.shape[0]
-        lines = np.empty((0, 2), dtype='int')
+        lines = np.empty((0, 2), dtype="int")
         size = np.prod(ctrl_pts.shape[1:])
         inds = np.arange(size).reshape(ctrl_pts.shape[1:])
         for idx in range(self.NPa):
             rng = np.arange(inds.shape[idx])
-            lines = np.append(lines, 
-                              np.concatenate((np.expand_dims(np.take(inds, rng[ :-1], axis=idx), axis=-1), 
-                                              np.expand_dims(np.take(inds, rng[1:  ], axis=idx), axis=-1)), 
-                                             axis=-1).reshape((-1, 2)), 
-                             axis=0)
-        cells = {'line': lines}
+            lines = np.append(
+                lines,
+                np.concatenate(
+                    (
+                        np.expand_dims(np.take(inds, rng[:-1], axis=idx), axis=-1),
+                        np.expand_dims(np.take(inds, rng[1:], axis=idx), axis=-1),
+                    ),
+                    axis=-1,
+                ).reshape((-1, 2)),
+                axis=0,
+            )
+        cells = {"line": lines}
         points = np.moveaxis(ctrl_pts, 0, -1).reshape((-1, NPh))
         greville = tuple(self.greville_abscissa())
         n = self.getNbFunc()
@@ -1137,12 +1161,21 @@ class BSpline:
                 point_data[key] = value(self, greville)
             else:
                 value = np.asarray(value)
-                if value.ndim>=2 and value.shape[-self.NPa:]==tuple(ctrl_pts.shape[1:]):
+                if value.ndim >= 2 and value.shape[-self.NPa :] == tuple(
+                    ctrl_pts.shape[1:]
+                ):
                     point_data[key] = value.reshape((n_step, -1, n)).transpose(0, 2, 1)
-                elif value.ndim>=2 and value.shape[-self.NPa:]==tuple(shape):
+                elif value.ndim >= 2 and value.shape[-self.NPa :] == tuple(shape):
                     paraview_size = value.shape[1]
-                    interp_field = griddata(interp_points, value.reshape((n_step*paraview_size, NXI)).T, points, method='linear')
-                    point_data[key] = interp_field.reshape((n, n_step, paraview_size)).transpose(1, 0, 2)
+                    interp_field = griddata(
+                        interp_points,
+                        value.reshape((n_step * paraview_size, NXI)).T,
+                        points,
+                        method="linear",
+                    )
+                    point_data[key] = interp_field.reshape(
+                        (n, n_step, paraview_size)
+                    ).transpose(1, 0, 2)
                 else:
                     raise ValueError(f"Field {key} shape {value.shape} not understood.")
         # make meshes
@@ -1151,18 +1184,20 @@ class BSpline:
             point_data_step = {}
             for key, value in point_data.items():
                 point_data_step[key] = value[i]
-            mesh = io.Mesh(points, cells, point_data_step) # type: ignore
+            mesh = io.Mesh(points, cells, point_data_step)  # type: ignore
             meshes.append(mesh)
 
         return meshes
-    
-    def make_elem_separator_meshes(self, 
-                                   ctrl_pts: np.ndarray[np.floating], 
-                                   n_eval_per_elem: Union[int, Iterable[int]]=10, 
-                                   n_step: int=1, 
-                                   fields: dict={}, 
-                                   XI: Union[None, tuple[np.ndarray[np.floating], ...]]=None, 
-                                   paraview_sizes: dict={}) -> list[io.Mesh]:
+
+    def make_elem_separator_meshes(
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        n_step: int = 1,
+        fields: dict = {},
+        XI: Union[None, tuple[np.ndarray[np.floating], ...]] = None,
+        paraview_sizes: dict = {},
+    ) -> list[io.Mesh]:
         """
         Create meshes representing the boundaries of every element in the B-spline for visualization.
 
@@ -1239,7 +1274,7 @@ class BSpline:
         shape_uniq = []
         for basis in self.bases:
             knot = basis.knot
-            knot_uniq = np.unique(knot[np.logical_and(knot>=0, knot<=1)])
+            knot_uniq = np.unique(knot[np.logical_and(knot >= 0, knot <= 1)])
             knots_uniq.append(knot_uniq)
             shape_uniq.append(knot_uniq.size)
         points = None
@@ -1251,15 +1286,23 @@ class BSpline:
             basis = self.bases[idx]
             knot_uniq = knots_uniq[idx]
             n_eval = n_eval_per_elem[idx]
-            couples = np.concatenate((np.expand_dims(knot_uniq[ :-1], axis=0), 
-                                      np.expand_dims(knot_uniq[1:  ], axis=0)), 
-                                     axis=0).reshape((2, -1)).T
+            couples = (
+                np.concatenate(
+                    (
+                        np.expand_dims(knot_uniq[:-1], axis=0),
+                        np.expand_dims(knot_uniq[1:], axis=0),
+                    ),
+                    axis=0,
+                )
+                .reshape((2, -1))
+                .T
+            )
             for a, b in couples:
-                lin =  np.linspace(a, b, n_eval)
-                inner_XI = tuple(knots_uniq[:idx] + [lin] + knots_uniq[(idx+1):])
-                inner_shape = shape_uniq[:idx] + [lin.size] + shape_uniq[(idx+1):]
+                lin = np.linspace(a, b, n_eval)
+                inner_XI = tuple(knots_uniq[:idx] + [lin] + knots_uniq[(idx + 1) :])
+                inner_shape = shape_uniq[:idx] + [lin.size] + shape_uniq[(idx + 1) :]
                 size = np.prod(inner_shape)
-                N = self.DN(inner_XI, [0]*self.NPa) # type: ignore
+                N = self.DN(inner_XI, [0] * self.NPa)  # type: ignore
                 pts = N @ ctrl_pts.reshape((NPh, -1)).T
                 points = pts if points is None else np.vstack((points, pts))
                 for key, value in fields.items():
@@ -1269,45 +1312,70 @@ class BSpline:
                         to_store = value(self, inner_XI)
                     else:
                         value = np.asarray(value)
-                        if value.ndim>=2 and value.shape[-self.NPa:]==tuple(ctrl_pts.shape[1:]):
+                        if value.ndim >= 2 and value.shape[-self.NPa :] == tuple(
+                            ctrl_pts.shape[1:]
+                        ):
                             paraview_size = value.shape[1]
-                            arr = value.reshape((n_step, paraview_size, n)).reshape((n_step*paraview_size, n))
-                            to_store = (arr @ N.T).reshape((n_step, paraview_size, -1)).transpose(0, 2, 1)
-                        elif value.ndim>=2 and value.shape[-self.NPa:]==tuple(shape):
+                            arr = value.reshape((n_step, paraview_size, n)).reshape(
+                                (n_step * paraview_size, n)
+                            )
+                            to_store = (
+                                (arr @ N.T)
+                                .reshape((n_step, paraview_size, -1))
+                                .transpose(0, 2, 1)
+                            )
+                        elif value.ndim >= 2 and value.shape[-self.NPa :] == tuple(
+                            shape
+                        ):
                             paraview_size = value.shape[1]
-                            interp_field = griddata(interp_points, value.reshape((n_step*paraview_size, NXI)).T, pts, method='linear')
-                            to_store = interp_field.reshape((pts.shape[0], n_step, paraview_size)).transpose(1, 0, 2)
+                            interp_field = griddata(
+                                interp_points,
+                                value.reshape((n_step * paraview_size, NXI)).T,
+                                pts,
+                                method="linear",
+                            )
+                            to_store = interp_field.reshape(
+                                (pts.shape[0], n_step, paraview_size)
+                            ).transpose(1, 0, 2)
                         else:
-                            raise ValueError(f"Field {key} shape {value.shape} not understood.")
+                            raise ValueError(
+                                f"Field {key} shape {value.shape} not understood."
+                            )
                     if point_data[key] is None:
                         point_data[key] = to_store
                     else:
-                        point_data[key] = np.concatenate((point_data[key], to_store), axis=1) # type: ignore
+                        point_data[key] = np.concatenate((point_data[key], to_store), axis=1)  # type: ignore
                 lns = Size + np.arange(size).reshape(inner_shape)
                 lns = np.moveaxis(lns, idx, 0).reshape((inner_shape[idx], -1))
-                lns = np.concatenate((np.expand_dims(lns[ :-1], axis=-1), 
-                                      np.expand_dims(lns[1:  ], axis=-1)), 
-                                     axis=-1).reshape((-1, 2))
+                lns = np.concatenate(
+                    (
+                        np.expand_dims(lns[:-1], axis=-1),
+                        np.expand_dims(lns[1:], axis=-1),
+                    ),
+                    axis=-1,
+                ).reshape((-1, 2))
                 lines = lns if lines is None else np.vstack((lines, lns))
                 Size += size
-        cells = {'line': lines}
+        cells = {"line": lines}
         # make meshes
         meshes = []
         for i in range(n_step):
             point_data_step = {}
             for key, value in point_data.items():
-                point_data_step[key] = value[i] # type: ignore
-            mesh = io.Mesh(points, cells, point_data_step) # type: ignore
+                point_data_step[key] = value[i]  # type: ignore
+            mesh = io.Mesh(points, cells, point_data_step)  # type: ignore
             meshes.append(mesh)
-        
+
         return meshes
-    
-    def make_elements_interior_meshes(self, 
-                                      ctrl_pts: np.ndarray[np.floating], 
-                                      n_eval_per_elem: Union[int, Iterable[int]]=10, 
-                                      n_step: int=1, 
-                                      fields: dict={}, 
-                                      XI: Union[None, tuple[np.ndarray[np.floating], ...]]=None) -> list[io.Mesh]:
+
+    def make_elements_interior_meshes(
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        n_step: int = 1,
+        fields: dict = {},
+        XI: Union[None, tuple[np.ndarray[np.floating], ...]] = None,
+    ) -> list[io.Mesh]:
         """
         Create meshes representing the interior of each element in the B-spline.
 
@@ -1391,12 +1459,20 @@ class BSpline:
         inds = np.arange(NXI).reshape(shape)
         for idx in range(self.NPa):
             rng = np.arange(inds.shape[idx])
-            inds = np.concatenate((np.expand_dims(np.take(inds, rng[ :-1], axis=idx), axis=-1), 
-                                   np.expand_dims(np.take(inds, rng[1:  ], axis=idx), axis=-1)), axis=-1)
-        if self.NPa>=2:
+            inds = np.concatenate(
+                (
+                    np.expand_dims(np.take(inds, rng[:-1], axis=idx), axis=-1),
+                    np.expand_dims(np.take(inds, rng[1:], axis=idx), axis=-1),
+                ),
+                axis=-1,
+            )
+        if self.NPa >= 2:
             for i in np.ndindex(*inds.shape[:-2]):
-                inds[i] = [[inds[i+(0, 0)], inds[i+(0, 1)]], [inds[i+(1, 1)], inds[i+(1, 0)]]]
-        inds = inds.reshape((*inds.shape[:self.NPa], -1))
+                inds[i] = [
+                    [inds[i + (0, 0)], inds[i + (0, 1)]],
+                    [inds[i + (1, 1)], inds[i + (1, 0)]],
+                ]
+        inds = inds.reshape((*inds.shape[: self.NPa], -1))
         inds = inds.reshape((-1, inds.shape[-1]))
         cells = {elements[inds.shape[-1]]: inds}
         # make fields
@@ -1407,15 +1483,23 @@ class BSpline:
                 point_data[key] = value(self, XI)
             else:
                 value = np.asarray(value)
-                if value.ndim>=2 and value.shape[-self.NPa:]==tuple(ctrl_pts.shape[1:]):
+                if value.ndim >= 2 and value.shape[-self.NPa :] == tuple(
+                    ctrl_pts.shape[1:]
+                ):
                     # Field given on control points: interpolate with basis functions
                     paraview_size = value.shape[1]
                     arr = value.reshape((n_step * paraview_size, n))
-                    point_data[key] = (arr @ N.T).reshape((n_step, paraview_size, NXI)).transpose(0, 2, 1)
-                elif value.ndim>=2 and value.shape[-self.NPa:]==tuple(shape):
+                    point_data[key] = (
+                        (arr @ N.T)
+                        .reshape((n_step, paraview_size, NXI))
+                        .transpose(0, 2, 1)
+                    )
+                elif value.ndim >= 2 and value.shape[-self.NPa :] == tuple(shape):
                     # Field already given on discretization grid
                     paraview_size = value.shape[1]
-                    point_data[key] = value.reshape((n_step, paraview_size, NXI)).transpose(0, 2, 1)
+                    point_data[key] = value.reshape(
+                        (n_step, paraview_size, NXI)
+                    ).transpose(0, 2, 1)
                 else:
                     raise ValueError(f"Field {key} shape {value.shape} not understood.")
         # make meshes
@@ -1424,25 +1508,25 @@ class BSpline:
             point_data_step = {}
             for key, value in point_data.items():
                 point_data_step[key] = value[i]
-            mesh = io.Mesh(points, cells, point_data_step) # type: ignore
+            mesh = io.Mesh(points, cells, point_data_step)  # type: ignore
             meshes.append(mesh)
-            
+
         return meshes
-    
+
     def saveParaview(
-        self, 
-        ctrl_pts: np.ndarray[np.floating], 
-        path: str, 
-        name: str, 
-        n_step: int=1, 
-        n_eval_per_elem: Union[int, Iterable[int]]=10, 
-        fields: Union[dict, None]=None, 
-        XI: Union[None, tuple[np.ndarray[np.floating], ...]]=None, 
-        groups: Union[dict[str, dict[str, Union[str, int]]], None]=None, 
-        make_pvd: bool=True, 
-        verbose: bool=True, 
-        fields_on_interior_only: Union[bool, Literal['auto'], list[str]]='auto'
-        ) -> dict[str, dict[str, Union[str, int]]]:
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        path: str,
+        name: str,
+        n_step: int = 1,
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        fields: Union[dict, None] = None,
+        XI: Union[None, tuple[np.ndarray[np.floating], ...]] = None,
+        groups: Union[dict[str, dict[str, Union[str, int]]], None] = None,
+        make_pvd: bool = True,
+        verbose: bool = True,
+        fields_on_interior_only: Union[bool, Literal["auto"], list[str]] = "auto",
+    ) -> dict[str, dict[str, Union[str, int]]]:
         """
         Save B-spline visualization data as Paraview files.
 
@@ -1450,7 +1534,7 @@ class BSpline:
         - Interior mesh showing the B-spline surface/volume
         - Element borders showing the mesh structure
         - Control points mesh showing the control structure
-        
+
         All files are saved in VTU format with an optional PVD file to group them.
 
         Parameters
@@ -1482,27 +1566,27 @@ class BSpline:
                 "field_name": `field_value`
             }
             where `field_value` can be either:
-            
+
             1. A numpy array with shape (`n_step`, `field_size`, `*ctrl_pts.shape[1:]`) where:
             - `n_step`: Number of time steps
             - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
             - `*ctrl_pts.shape[1:]`: Same shape as control points (excluding `NPh`)
-            
+
             2. A numpy array with shape (`n_step`, `field_size`, `*grid_shape`) where:
             - `n_step`: Number of time steps
             - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
             - `*grid_shape`: Shape of the evaluation grid (number of points along each isoparametric axis)
-            
-            3. A function that computes field values (`np.ndarray[np.floating]`) at given 
-            points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation 
+
+            3. A function that computes field values (`np.ndarray[np.floating]`) at given
+            points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
             points for each dimension (`tuple[np.ndarray[np.floating], ...]`).
             The result should be an array of shape (`n_step`, `n_points`, `field_size`) where:
             - `n_step`: Number of time steps
             - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
             - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
-            
+
             By default, None.
-        
+
         XI : tuple[np.ndarray[np.floating], ...], optional
             Parametric coordinates at which to evaluate the B-spline and fields.
             If not `None`, overrides the `n_eval_per_elem` parameter.
@@ -1521,7 +1605,7 @@ class BSpline:
             - "interior": For the B-spline surface/volume mesh
             - "elements_borders": For the element boundary mesh
             - "control_points": For the control point mesh
-            
+
             If provided, existing groups are updated; if None, these groups are created.
             By default, None.
 
@@ -1534,7 +1618,7 @@ class BSpline:
         fields_on_interior_only: Union[bool, Literal['auto'], list[str]], optionnal
             Whether to include fields only on the interior mesh (`True`), on all meshes (`False`),
             or on specified field names.
-            If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'` 
+            If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'`
             are included on all meshes while others are only included on the interior mesh.
             By default, 'auto'.
 
@@ -1570,16 +1654,16 @@ class BSpline:
         >>> fields = {"displacement": displacement}
         >>> spline.saveParaview(ctrl_pts, "./output", "bspline", fields=fields)
         """
-        
+
         if type(n_eval_per_elem) is int:
-            n_eval_per_elem = [n_eval_per_elem]*self.NPa
-        
+            n_eval_per_elem = [n_eval_per_elem] * self.NPa
+
         if fields is None:
             fields = {}
-        
+
         if groups is None:
             groups = {}
-        
+
         interior = "interior"
         if interior in groups:
             groups[interior]["npart"] += 1
@@ -1595,7 +1679,7 @@ class BSpline:
             groups[control_points]["npart"] += 1
         else:
             groups[control_points] = {"ext": "vtu", "npart": 1, "nstep": n_step}
-        
+
         paraview_sizes = {}
         if fields_on_interior_only is True:
             for key, value in fields.items():
@@ -1605,11 +1689,13 @@ class BSpline:
                     paraview_sizes[key] = value.shape[1]
         elif fields_on_interior_only is False:
             pass
-        elif fields_on_interior_only=='auto':
+        elif fields_on_interior_only == "auto":
             for key, value in fields.items():
-                if key not in ['u', 'U', 'displacement', 'displ']:
+                if key not in ["u", "U", "displacement", "displ"]:
                     if callable(value):
-                        paraview_sizes[key] = value(self, np.zeros((self.NPa, 1))).shape[2]
+                        paraview_sizes[key] = value(
+                            self, np.zeros((self.NPa, 1))
+                        ).shape[2]
                     else:
                         paraview_sizes[key] = value.shape[1]
         else:
@@ -1619,45 +1705,57 @@ class BSpline:
                     paraview_sizes[key] = value(self, np.zeros((self.NPa, 1))).shape[2]
                 else:
                     paraview_sizes[key] = value.shape[1]
-                
-        meshes = self.make_elements_interior_meshes(ctrl_pts, n_eval_per_elem, n_step, fields, XI)
-        prefix = os.path.join(path, f"{name}_{interior}_{groups[interior]['npart'] - 1}")
+
+        meshes = self.make_elements_interior_meshes(
+            ctrl_pts, n_eval_per_elem, n_step, fields, XI
+        )
+        prefix = os.path.join(
+            path, f"{name}_{interior}_{groups[interior]['npart'] - 1}"
+        )
         for time_step, mesh in enumerate(meshes):
             mesh.write(f"{prefix}_{time_step}.vtu")
         if verbose:
             print(interior, "done")
 
-        meshes = self.make_elem_separator_meshes(ctrl_pts, n_eval_per_elem, n_step, fields, XI, paraview_sizes)
-        prefix = os.path.join(path, f"{name}_{elements_borders}_{groups[elements_borders]['npart'] - 1}")
+        meshes = self.make_elem_separator_meshes(
+            ctrl_pts, n_eval_per_elem, n_step, fields, XI, paraview_sizes
+        )
+        prefix = os.path.join(
+            path, f"{name}_{elements_borders}_{groups[elements_borders]['npart'] - 1}"
+        )
         for time_step, mesh in enumerate(meshes):
             mesh.write(f"{prefix}_{time_step}.vtu")
         if verbose:
             print(elements_borders, "done")
 
-        meshes = self.make_control_poly_meshes(ctrl_pts, n_eval_per_elem, n_step, fields, XI, paraview_sizes)
-        prefix = os.path.join(path, f"{name}_{control_points}_{groups[control_points]['npart'] - 1}")
+        meshes = self.make_control_poly_meshes(
+            ctrl_pts, n_eval_per_elem, n_step, fields, XI, paraview_sizes
+        )
+        prefix = os.path.join(
+            path, f"{name}_{control_points}_{groups[control_points]['npart'] - 1}"
+        )
         for time_step, mesh in enumerate(meshes):
             mesh.write(f"{prefix}_{time_step}.vtu")
         if verbose:
             print(control_points, "done")
-        
+
         if make_pvd:
             writePVD(os.path.join(path, name), groups)
-        
+
         return groups
-    
+
     def getGeomdl(self, ctrl_pts):
         try:
             from geomdl import BSpline as geomdlBS
         except:
-            raise 
-        if self.NPa==1:
+            raise
+        if self.NPa == 1:
             curve = geomdlBS.Curve()
             curve.degree = self.bases[0].p
             curve.ctrl_pts = ctrl_pts.T.tolist()
             curve.knotvector = self.bases[0].knot
             return curve
-        elif self.NPa==2:
+        elif self.NPa == 2:
             surf = geomdlBS.Surface()
             surf.degree_u = self.bases[0].p
             surf.degree_v = self.bases[1].p
@@ -1665,40 +1763,39 @@ class BSpline:
             surf.knotvector_u = self.bases[0].knot
             surf.knotvector_v = self.bases[1].knot
             return surf
-        elif self.NPa==3:
+        elif self.NPa == 3:
             vol = geomdlBS.Volume()
             vol.degree_u = self.bases[0].p
             vol.degree_v = self.bases[1].p
             vol.degree_w = self.bases[2].p
             vol.cpsize = ctrl_pts.shape[1:]
             # ctrl_pts format (zeta, xi, eta)
-            vol.ctrl_pts = ctrl_pts.transpose(3, 1, 2, 0).reshape((-1, ctrl_pts.shape[0])).tolist()
+            vol.ctrl_pts = (
+                ctrl_pts.transpose(3, 1, 2, 0).reshape((-1, ctrl_pts.shape[0])).tolist()
+            )
             vol.knotvector_u = self.bases[0].knot
             vol.knotvector_v = self.bases[1].knot
             vol.knotvector_w = self.bases[2].knot
             return vol
         else:
             raise NotImplementedError("Can only export curves, sufaces or volumes !")
-    
+
     def to_dict(self) -> dict:
         """
         Returns a dictionary representation of the BSpline object.
         """
-        return {
-            'NPa': self.NPa,
-            'bases': [b.to_dict() for b in self.bases]
-        }
-    
+        return {"NPa": self.NPa, "bases": [b.to_dict() for b in self.bases]}
+
     @classmethod
     def from_dict(cls, data: dict) -> "BSpline":
         """
         Creates a BSpline object from a dictionary representation.
         """
-        NPa = data['NPa']
-        bases = np.array([BSplineBasis.from_dict(b) for b in data['bases']])
+        NPa = data["NPa"]
+        bases = np.array([BSplineBasis.from_dict(b) for b in data["bases"]])
         return cls(NPa, bases)
-    
-    def save(self, filepath: str, ctrl_pts: Union[np.ndarray, None]=None) -> None:
+
+    def save(self, filepath: str, ctrl_pts: Union[np.ndarray, None] = None) -> None:
         """
         Save the BSpline object to a file.
         Control points are optional.
@@ -1706,16 +1803,18 @@ class BSpline:
         """
         data = self.to_dict()
         if ctrl_pts is not None:
-            data['ctrl_pts'] = ctrl_pts.tolist()
-        ext = filepath.split('.')[-1]
-        if ext == 'json':
-            with open(filepath, 'w') as f:
+            data["ctrl_pts"] = ctrl_pts.tolist()
+        ext = filepath.split(".")[-1]
+        if ext == "json":
+            with open(filepath, "w") as f:
                 json.dump(data, f, indent=2)
-        elif ext == 'pkl':
-            with open(filepath, 'wb') as f:
+        elif ext == "pkl":
+            with open(filepath, "wb") as f:
                 pickle.dump(data, f)
         else:
-            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+            raise ValueError(
+                f"Unknown extension {ext}. Supported extensions: json, pkl."
+            )
 
     @classmethod
     def load(cls, filepath: str) -> Union["BSpline", tuple["BSpline", np.ndarray]]:
@@ -1724,33 +1823,35 @@ class BSpline:
         May return control points if the file contains them.
         Supported extensions: json, pkl
         """
-        ext = filepath.split('.')[-1]
-        if ext == 'json':
-            with open(filepath, 'r') as f:
+        ext = filepath.split(".")[-1]
+        if ext == "json":
+            with open(filepath, "r") as f:
                 data = json.load(f)
-        elif ext == 'pkl':
-            with open(filepath, 'rb') as f:
+        elif ext == "pkl":
+            with open(filepath, "rb") as f:
                 data = pickle.load(f)
         else:
-            raise ValueError(f"Unknown extension {ext}. Supported extensions: json, pkl.")
+            raise ValueError(
+                f"Unknown extension {ext}. Supported extensions: json, pkl."
+            )
         this = cls.from_dict(data)
-        if 'ctrl_pts' in data:
-            ctrl_pts = np.array(data['ctrl_pts'])
+        if "ctrl_pts" in data:
+            ctrl_pts = np.array(data["ctrl_pts"])
             return this, ctrl_pts
         return this
-    
+
     def plot(
-        self, 
-        ctrl_pts: np.ndarray[np.floating], 
-        n_eval_per_elem: Union[int, Iterable[int]]=10, 
-        plotter: Union[mpl.axes.Axes, 'pv.Plotter', None]=None, 
-        ctrl_color: str='#d95f02', 
-        interior_color: str='#666666', 
-        elem_color: str='#7570b3', 
-        border_color: str='#1b9e77', 
-        language: Union[Literal["english"], Literal["français"]]="english", 
-        show: bool=True
-        ) -> Union[mpl.axes.Axes, 'pv.Plotter', None]:
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        plotter: Union[mpl.axes.Axes, "pv.Plotter", None] = None,
+        ctrl_color: str = "#d95f02",
+        interior_color: str = "#666666",
+        elem_color: str = "#7570b3",
+        border_color: str = "#1b9e77",
+        language: Union[Literal["english"], Literal["français"]] = "english",
+        show: bool = True,
+    ) -> Union[mpl.axes.Axes, "pv.Plotter", None]:
         """
         Plot the B-spline using either Matplotlib or PyVista, depending on availability.
 
@@ -1827,23 +1928,42 @@ class BSpline:
         >>> spline.plot(ctrl_pts)
         """
         NPh = ctrl_pts.shape[0]
-        if _can_visualize_pyvista and NPh==3:
-            return self.plotPV(ctrl_pts, n_eval_per_elem, plotter, ctrl_color, interior_color, elem_color, border_color, show)
+        if _can_visualize_pyvista and NPh == 3:
+            return self.plotPV(
+                ctrl_pts,
+                n_eval_per_elem,
+                plotter,
+                ctrl_color,
+                interior_color,
+                elem_color,
+                border_color,
+                show,
+            )
         else:
-            return self.plotMPL(ctrl_pts, n_eval_per_elem, plotter, ctrl_color, interior_color, elem_color, border_color, language, show)
-    
+            return self.plotMPL(
+                ctrl_pts,
+                n_eval_per_elem,
+                plotter,
+                ctrl_color,
+                interior_color,
+                elem_color,
+                border_color,
+                language,
+                show,
+            )
+
     def plotMPL(
-        self, 
-        ctrl_pts: np.ndarray[np.floating], 
-        n_eval_per_elem: Union[int, Iterable[int]]=10, 
-        ax: Union[mpl.axes.Axes, None]=None, 
-        ctrl_color: str='#1b9e77', 
-        interior_color: str='#7570b3', 
-        elem_color: str='#666666', 
-        border_color: str='#d95f02', 
-        language: Union[Literal["english"], Literal["français"]]="english", 
-        show: bool=True
-        ) -> Union[mpl.axes.Axes, None]:
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        ax: Union[mpl.axes.Axes, None] = None,
+        ctrl_color: str = "#1b9e77",
+        interior_color: str = "#7570b3",
+        elem_color: str = "#666666",
+        border_color: str = "#d95f02",
+        language: Union[Literal["english"], Literal["français"]] = "english",
+        show: bool = True,
+    ) -> Union[mpl.axes.Axes, None]:
         """
         Plot the B-spline using Matplotlib.
 
@@ -1868,7 +1988,7 @@ class BSpline:
 
         ax : Union[mpl.axes.Axes, None], optional
             Matplotlib axes for plotting. If None, creates a new figure and axes.
-            For 3D visualizations, must be a 3D axes if provided (created with 
+            For 3D visualizations, must be a 3D axes if provided (created with
             `projection='3d'`).
             Default is None (creates new axes).
 
@@ -1896,15 +2016,15 @@ class BSpline:
             - Outlines the entire B-spline patch
             - Helps distinguish patch edges
             Default is '#d95f02' (orange).
-        
+
         language: str, optional
             Language for the plot labels. Can be 'english' or 'français'.
             Default is 'english'.
-        
+
         show : bool, optional
             Whether to display the plot immediately. Can be useful to add more stuff to the plot.
             Default is True.
-        
+
         Returns
         -------
         ax : Union[mpl.axes.Axes, None]
@@ -1956,80 +2076,131 @@ class BSpline:
         from matplotlib.patches import Polygon
         from mpl_toolkits.mplot3d.art3d import Line3DCollection
         from matplotlib import lines
-        if language=="english":
+
+        if language == "english":
             ctrl_mesh = "Control mesh"
             elems_bord = "Elements borders"
             b_spline = "B-spline"
             b_spline_patch = "B-spline patch"
             patch_bord = "Patch borders"
-        elif language=="français":
+        elif language == "français":
             ctrl_mesh = "Maillage de contrôle"
             elems_bord = "Frontières inter-éléments"
             b_spline = "B-spline"
             b_spline_patch = "Patch B-spline"
             patch_bord = "Frontières inter-patchs"
         else:
-            raise NotImplementedError(f"Can't understand language '{language}'. Try 'english' or 'français'.")
+            raise NotImplementedError(
+                f"Can't understand language '{language}'. Try 'english' or 'français'."
+            )
         NPh = ctrl_pts.shape[0]
         fig = plt.figure() if ax is None else ax.get_figure()
-        if NPh==2:
+        if NPh == 2:
             ax = fig.add_subplot() if ax is None else ax
-            if self.NPa==1:
-                ax.plot(ctrl_pts[0], ctrl_pts[1], marker="o", c=ctrl_color, label=ctrl_mesh, zorder=0)
-                xi, = self.linspace(n_eval_per_elem=n_eval_per_elem)
+            if self.NPa == 1:
+                ax.plot(
+                    ctrl_pts[0],
+                    ctrl_pts[1],
+                    marker="o",
+                    c=ctrl_color,
+                    label=ctrl_mesh,
+                    zorder=0,
+                )
+                (xi,) = self.linspace(n_eval_per_elem=n_eval_per_elem)
                 x, y = self.__call__(ctrl_pts, [xi])
                 ax.plot(x, y, c=interior_color, label=b_spline, zorder=1)
-                xi_elem, = self.linspace(n_eval_per_elem=1)
+                (xi_elem,) = self.linspace(n_eval_per_elem=1)
                 x_elem, y_elem = self.__call__(ctrl_pts, [xi_elem])
-                ax.scatter(x_elem, y_elem, marker='*', c=elem_color, label=elems_bord, zorder=2) # type: ignore
-            elif self.NPa==2:
+                ax.scatter(x_elem, y_elem, marker="*", c=elem_color, label=elems_bord, zorder=2)  # type: ignore
+            elif self.NPa == 2:
                 xi, eta = self.linspace(n_eval_per_elem=n_eval_per_elem)
                 xi_elem, eta_elem = self.linspace(n_eval_per_elem=1)
                 x_xi, y_xi = self.__call__(ctrl_pts, [xi_elem, eta])
                 x_eta, y_eta = self.__call__(ctrl_pts, [xi, eta_elem])
-                x_pol = np.hstack((x_xi[ 0, :: 1], x_eta[:: 1, -1], x_xi[-1, ::-1], x_eta[::-1,  0]))
-                y_pol = np.hstack((y_xi[ 0, :: 1], y_eta[:: 1, -1], y_xi[-1, ::-1], y_eta[::-1,  0]))
+                x_pol = np.hstack(
+                    (x_xi[0, ::1], x_eta[::1, -1], x_xi[-1, ::-1], x_eta[::-1, 0])
+                )
+                y_pol = np.hstack(
+                    (y_xi[0, ::1], y_eta[::1, -1], y_xi[-1, ::-1], y_eta[::-1, 0])
+                )
                 xy_pol = np.hstack((x_pol[:, None], y_pol[:, None]))
-                ax.add_patch(Polygon(xy_pol, fill=True, edgecolor=None, facecolor=interior_color, alpha=0.5, label=b_spline_patch, zorder=0)) # type: ignore
-                ax.plot(ctrl_pts[0, 0, 0], ctrl_pts[1, 0, 0], marker="o", c=ctrl_color, label=ctrl_mesh, zorder=1, ms=plt.rcParams['lines.markersize']/np.sqrt(2))
-                ax.add_collection(LineCollection(ctrl_pts.transpose(1, 2, 0), colors=ctrl_color, zorder=1)) # type: ignore
-                ax.add_collection(LineCollection(ctrl_pts.transpose(2, 1, 0), colors=ctrl_color, zorder=1)) # type: ignore
-                ax.scatter(ctrl_pts[0].ravel(), ctrl_pts[1].ravel(), marker="o", c=ctrl_color, zorder=1, s=0.5*plt.rcParams['lines.markersize']**2) # type: ignore
-                ax.plot(x_xi[0, 0], y_xi[0, 0], linestyle="-", c=elem_color, label=elems_bord, zorder=2)
-                ax.add_collection(LineCollection(np.array([x_xi, y_xi]).transpose(1, 2, 0)[1:-1], colors=elem_color, zorder=2)) # type: ignore
-                ax.add_collection(LineCollection(np.array([x_eta, y_eta]).transpose(2, 1, 0)[1:-1], colors=elem_color, zorder=2)) # type: ignore
-                ax.add_patch(Polygon(xy_pol, lw=1.25*plt.rcParams['lines.linewidth'], fill=False, edgecolor=border_color, label=patch_bord, zorder=2)) # type: ignore
+                ax.add_patch(Polygon(xy_pol, fill=True, edgecolor=None, facecolor=interior_color, alpha=0.5, label=b_spline_patch, zorder=0))  # type: ignore
+                ax.plot(
+                    ctrl_pts[0, 0, 0],
+                    ctrl_pts[1, 0, 0],
+                    marker="o",
+                    c=ctrl_color,
+                    label=ctrl_mesh,
+                    zorder=1,
+                    ms=plt.rcParams["lines.markersize"] / np.sqrt(2),
+                )
+                ax.add_collection(LineCollection(ctrl_pts.transpose(1, 2, 0), colors=ctrl_color, zorder=1))  # type: ignore
+                ax.add_collection(LineCollection(ctrl_pts.transpose(2, 1, 0), colors=ctrl_color, zorder=1))  # type: ignore
+                ax.scatter(ctrl_pts[0].ravel(), ctrl_pts[1].ravel(), marker="o", c=ctrl_color, zorder=1, s=0.5 * plt.rcParams["lines.markersize"] ** 2)  # type: ignore
+                ax.plot(
+                    x_xi[0, 0],
+                    y_xi[0, 0],
+                    linestyle="-",
+                    c=elem_color,
+                    label=elems_bord,
+                    zorder=2,
+                )
+                ax.add_collection(LineCollection(np.array([x_xi, y_xi]).transpose(1, 2, 0)[1:-1], colors=elem_color, zorder=2))  # type: ignore
+                ax.add_collection(LineCollection(np.array([x_eta, y_eta]).transpose(2, 1, 0)[1:-1], colors=elem_color, zorder=2))  # type: ignore
+                ax.add_patch(Polygon(xy_pol, lw=1.25 * plt.rcParams["lines.linewidth"], fill=False, edgecolor=border_color, label=patch_bord, zorder=2))  # type: ignore
             else:
                 raise ValueError(f"Can't plot a {self.NPa}D shape in a 2D space.")
             ax.legend()
             ax.set_aspect(1)
-        elif NPh==3:
-            ax = fig.add_subplot(projection='3d') if ax is None else ax
-            if self.NPa==1:
+        elif NPh == 3:
+            ax = fig.add_subplot(projection="3d") if ax is None else ax
+            if self.NPa == 1:
                 pass
-            elif self.NPa==2:
+            elif self.NPa == 2:
                 xi, eta = self.linspace(n_eval_per_elem=n_eval_per_elem)
                 xi_elem, eta_elem = self.linspace(n_eval_per_elem=1)
                 x, y, z = self.__call__(ctrl_pts, [xi, eta])
                 x_xi, y_xi, z_xi = self.__call__(ctrl_pts, [xi_elem, eta])
                 x_eta, y_eta, z_eta = self.__call__(ctrl_pts, [xi, eta_elem])
-                ax.plot_surface(x, y, z, rcount=1, ccount=1, edgecolor=None, facecolor=interior_color, alpha=0.5)
-                ax.plot_wireframe(ctrl_pts[0], ctrl_pts[1], ctrl_pts[2], color=ctrl_color, zorder=2)
-                ax.scatter(ctrl_pts[0], ctrl_pts[1], ctrl_pts[2], color=ctrl_color, zorder=2)
-                ax.add_collection(Line3DCollection(np.array([x_xi, y_xi, z_xi]).transpose(1, 2, 0), colors=elem_color, zorder=1)) # type: ignore
-                ax.add_collection(Line3DCollection(np.array([x_eta, y_eta, z_eta]).transpose(2, 1, 0), colors=elem_color, zorder=1)) # type: ignore
+                ax.plot_surface(
+                    x,
+                    y,
+                    z,
+                    rcount=1,
+                    ccount=1,
+                    edgecolor=None,
+                    facecolor=interior_color,
+                    alpha=0.5,
+                )
+                ax.plot_wireframe(
+                    ctrl_pts[0], ctrl_pts[1], ctrl_pts[2], color=ctrl_color, zorder=2
+                )
+                ax.scatter(
+                    ctrl_pts[0], ctrl_pts[1], ctrl_pts[2], color=ctrl_color, zorder=2
+                )
+                ax.add_collection(Line3DCollection(np.array([x_xi, y_xi, z_xi]).transpose(1, 2, 0), colors=elem_color, zorder=1))  # type: ignore
+                ax.add_collection(Line3DCollection(np.array([x_eta, y_eta, z_eta]).transpose(2, 1, 0), colors=elem_color, zorder=1))  # type: ignore
                 # ax.plot_surface(x, y, z, rcount=1, ccount=1, edgecolor=border_color, facecolor=None, alpha=0)
-                ctrl_handle = lines.Line2D([], [], color=ctrl_color, marker='o', linestyle='-', label=ctrl_mesh)
-                elem_handle = lines.Line2D([], [], color=elem_color, linestyle='-', label=elems_bord)
-                border_handle = lines.Line2D([], [], color=border_color, linestyle='-', label=patch_bord)
+                ctrl_handle = lines.Line2D(
+                    [], [], color=ctrl_color, marker="o", linestyle="-", label=ctrl_mesh
+                )
+                elem_handle = lines.Line2D(
+                    [], [], color=elem_color, linestyle="-", label=elems_bord
+                )
+                border_handle = lines.Line2D(
+                    [], [], color=border_color, linestyle="-", label=patch_bord
+                )
                 ax.legend(handles=[ctrl_handle, elem_handle, border_handle])
-                mid_param = [np.array([sum(self.bases[0].span)/2]), np.array([sum(self.bases[1].span)/2])]
+                mid_param = [
+                    np.array([sum(self.bases[0].span) / 2]),
+                    np.array([sum(self.bases[1].span) / 2]),
+                ]
                 dxi, deta = self.__call__(ctrl_pts, mid_param, k=1)
                 nx, ny, nz = np.cross(dxi.ravel(), deta.ravel())
                 azim = np.degrees(np.arctan2(ny, nx))
                 elev = np.degrees(np.arcsin(nz / np.sqrt(nx**2 + ny**2 + nz**2)))
                 ax.view_init(elev=elev + 30, azim=azim)
-            elif self.NPa==3:
+            elif self.NPa == 3:
                 XI = self.linspace(n_eval_per_elem=n_eval_per_elem)
                 XI_elem = self.linspace(n_eval_per_elem=1)
                 for face in range(3):
@@ -2037,22 +2208,42 @@ class BSpline:
                         XI_face = list(XI)
                         XI_face[face] = np.array([XI[face][side]])
                         X = np.squeeze(np.array(self.__call__(ctrl_pts, XI_face)))
-                        ax.plot_surface(*X, rcount=1, ccount=1, edgecolor=None, color=interior_color, alpha=0.5)
+                        ax.plot_surface(
+                            *X,
+                            rcount=1,
+                            ccount=1,
+                            edgecolor=None,
+                            color=interior_color,
+                            alpha=0.5,
+                        )
                 for axis in range(3):
-                    ctrl_mesh_axis = np.rollaxis(ctrl_pts, axis + 1, 1).reshape((3, ctrl_pts.shape[axis + 1], -1))
-                    ax.add_collection(Line3DCollection(ctrl_mesh_axis.transpose(2, 1, 0), colors=ctrl_color, zorder=2)) # type: ignore
+                    ctrl_mesh_axis = np.rollaxis(ctrl_pts, axis + 1, 1).reshape(
+                        (3, ctrl_pts.shape[axis + 1], -1)
+                    )
+                    ax.add_collection(Line3DCollection(ctrl_mesh_axis.transpose(2, 1, 0), colors=ctrl_color, zorder=2))  # type: ignore
                 ax.scatter(*ctrl_pts.reshape((3, -1)), color=ctrl_color, zorder=2)
                 for face in range(3):
                     for side in [-1, 0]:
-                        for face_i, transpose in zip(sorted([(face + 1)%3, (face + 2)%3]), ((1, 2, 0), (2, 1, 0))):
+                        for face_i, transpose in zip(
+                            sorted([(face + 1) % 3, (face + 2) % 3]),
+                            ((1, 2, 0), (2, 1, 0)),
+                        ):
                             XI_elem_border = list(XI)
                             XI_elem_border[face] = np.array([XI[face][side]])
                             XI_elem_border[face_i] = XI_elem[face_i]
-                            X_elem_border = np.squeeze(np.array(self.__call__(ctrl_pts, XI_elem_border)))
-                            ax.add_collection(Line3DCollection(X_elem_border.transpose(*transpose), colors=elem_color, zorder=1)) # type: ignore
-                ctrl_handle = lines.Line2D([], [], color=ctrl_color, marker='o', linestyle='-', label=ctrl_mesh)
-                elem_handle = lines.Line2D([], [], color=elem_color, linestyle='-', label=elems_bord)
-                border_handle = lines.Line2D([], [], color=border_color, linestyle='-', label=patch_bord)
+                            X_elem_border = np.squeeze(
+                                np.array(self.__call__(ctrl_pts, XI_elem_border))
+                            )
+                            ax.add_collection(Line3DCollection(X_elem_border.transpose(*transpose), colors=elem_color, zorder=1))  # type: ignore
+                ctrl_handle = lines.Line2D(
+                    [], [], color=ctrl_color, marker="o", linestyle="-", label=ctrl_mesh
+                )
+                elem_handle = lines.Line2D(
+                    [], [], color=elem_color, linestyle="-", label=elems_bord
+                )
+                border_handle = lines.Line2D(
+                    [], [], color=border_color, linestyle="-", label=patch_bord
+                )
                 ax.legend(handles=[ctrl_handle, elem_handle, border_handle])
             else:
                 raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
@@ -2064,16 +2255,16 @@ class BSpline:
             return ax
 
     def plotPV(
-        self, 
-        ctrl_pts: np.ndarray[np.floating], 
-        n_eval_per_elem: Union[int, Iterable[int]]=10, 
-        pv_plotter: Union['pv.Plotter', None]=None, 
-        ctrl_color: str='#d95f02', 
-        interior_color: str='#666666', 
-        elem_color: str='#7570b3', 
-        border_color: str='#1b9e77', 
-        show: bool=True
-        ) -> Union['pv.Plotter', None]:
+        self,
+        ctrl_pts: np.ndarray[np.floating],
+        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        pv_plotter: Union["pv.Plotter", None] = None,
+        ctrl_color: str = "#d95f02",
+        interior_color: str = "#666666",
+        elem_color: str = "#7570b3",
+        border_color: str = "#1b9e77",
+        show: bool = True,
+    ) -> Union["pv.Plotter", None]:
         """
         Plot the B-spline using PyVista for 3D visualization.
 
@@ -2135,7 +2326,7 @@ class BSpline:
         >>> spline = BSpline(degrees, knots)
         >>> ctrl_pts = np.random.rand(3, 3)  # 3D control points
         >>> spline.plotPV(ctrl_pts)
-        
+
         Plot a 2D surface in 3D space:
         >>> degrees = [2, 2]
         >>> knots = [np.array([0, 0, 0, 1, 1, 1], dtype='float'),
@@ -2145,55 +2336,123 @@ class BSpline:
         >>> spline.plotPV(ctrl_pts)
         """
         import pyvista as pv
+
         NPh = ctrl_pts.shape[0]
-        if NPh==2:
-            ctrl_pts = np.concatenate((ctrl_pts, np.zeros((1, *ctrl_pts.shape[1:]))), axis=0)
+        if NPh == 2:
+            ctrl_pts = np.concatenate(
+                (ctrl_pts, np.zeros((1, *ctrl_pts.shape[1:]))), axis=0
+            )
             print("Control points converted to 3D for plot.")
-        elif NPh!=3:
+        elif NPh != 3:
             raise ValueError("Can only plot in a 3D space.")
         if pv_plotter is None:
             pv_plotter = pv.Plotter()
-        if self.NPa==1:
-            lines = self.__call__(ctrl_pts, self.linspace(n_eval_per_elem=n_eval_per_elem)).T
+        if self.NPa == 1:
+            lines = self.__call__(
+                ctrl_pts, self.linspace(n_eval_per_elem=n_eval_per_elem)
+            ).T
             pv_plotter.add_lines(lines, connected=True, color=interior_color, width=2)
             points = self.__call__(ctrl_pts, self.linspace(n_eval_per_elem=1)).T
             pv_plotter.add_points(points, color=border_color, point_size=10)
-            pv_plotter.add_points(ctrl_pts.T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
-        elif self.NPa==2:
+            pv_plotter.add_points(
+                ctrl_pts.T,
+                color=ctrl_color,
+                point_size=8,
+                render_points_as_spheres=True,
+            )
+        elif self.NPa == 2:
             xi, eta = self.linspace(n_eval_per_elem=n_eval_per_elem)
             xi_elem, eta_elem = self.linspace(n_eval_per_elem=1)
             x, y, z = self.__call__(ctrl_pts, [xi, eta])
             x_xi, y_xi, z_xi = self.__call__(ctrl_pts, [xi_elem, eta])
             x_eta, y_eta, z_eta = self.__call__(ctrl_pts, [xi, eta_elem])
-            pv_plotter.add_mesh(pv.StructuredGrid(x, y, z), color=interior_color, opacity=0.5)
-            lines_xi = np.repeat(np.stack((x_xi, y_xi, z_xi)).transpose(1, 2, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
-            lines_eta = np.repeat(np.stack((x_eta, y_eta, z_eta)).transpose(2, 1, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
+            pv_plotter.add_mesh(
+                pv.StructuredGrid(x, y, z), color=interior_color, opacity=0.5
+            )
+            lines_xi = np.repeat(
+                np.stack((x_xi, y_xi, z_xi)).transpose(1, 2, 0), 2, axis=1
+            )[:, 1:-1].reshape((-1, 3))
+            lines_eta = np.repeat(
+                np.stack((x_eta, y_eta, z_eta)).transpose(2, 1, 0), 2, axis=1
+            )[:, 1:-1].reshape((-1, 3))
             lines = np.concatenate((lines_xi, lines_eta), axis=0)
             pv_plotter.add_lines(lines, connected=False, color=elem_color, width=2)
-            pv_plotter.add_points(ctrl_pts.reshape((3, -1)).T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
-        elif self.NPa==3:
+            pv_plotter.add_points(
+                ctrl_pts.reshape((3, -1)).T,
+                color=ctrl_color,
+                point_size=8,
+                render_points_as_spheres=True,
+            )
+        elif self.NPa == 3:
             xi, eta, zeta = self.linspace(n_eval_per_elem=n_eval_per_elem)
             xi_elem, eta_elem, zeta_elem = self.linspace(n_eval_per_elem=1)
-            XI_faces = [[[xi, eta, np.array([zeta[0]])], [xi, eta, np.array([zeta[-1]])]], 
-                        [[xi, np.array([eta[0]]), zeta], [xi, np.array([eta[-1]]), zeta]], 
-                        [[np.array([xi[0]]), eta, zeta], [np.array([xi[-1]]), eta, zeta]]]
-            XI_elem_borders = [[[[xi_elem, eta, np.array([zeta[ 0]])], [xi, eta_elem, np.array([zeta[ 0]])]], 
-                                [[xi_elem, eta, np.array([zeta[-1]])], [xi, eta_elem, np.array([zeta[-1]])]]], 
-                               [[[xi_elem, np.array([eta[ 0]]), zeta], [xi, np.array([eta[ 0]]), zeta_elem]], 
-                                [[xi_elem, np.array([eta[-1]]), zeta], [xi, np.array([eta[-1]]), zeta_elem]]], 
-                               [[[np.array([xi[ 0]]), eta_elem, zeta], [np.array([xi[ 0]]), eta, zeta_elem]], 
-                                [[np.array([xi[-1]]), eta_elem, zeta], [np.array([xi[-1]]), eta, zeta_elem]]]]
+            XI_faces = [
+                [[xi, eta, np.array([zeta[0]])], [xi, eta, np.array([zeta[-1]])]],
+                [[xi, np.array([eta[0]]), zeta], [xi, np.array([eta[-1]]), zeta]],
+                [[np.array([xi[0]]), eta, zeta], [np.array([xi[-1]]), eta, zeta]],
+            ]
+            XI_elem_borders = [
+                [
+                    [
+                        [xi_elem, eta, np.array([zeta[0]])],
+                        [xi, eta_elem, np.array([zeta[0]])],
+                    ],
+                    [
+                        [xi_elem, eta, np.array([zeta[-1]])],
+                        [xi, eta_elem, np.array([zeta[-1]])],
+                    ],
+                ],
+                [
+                    [
+                        [xi_elem, np.array([eta[0]]), zeta],
+                        [xi, np.array([eta[0]]), zeta_elem],
+                    ],
+                    [
+                        [xi_elem, np.array([eta[-1]]), zeta],
+                        [xi, np.array([eta[-1]]), zeta_elem],
+                    ],
+                ],
+                [
+                    [
+                        [np.array([xi[0]]), eta_elem, zeta],
+                        [np.array([xi[0]]), eta, zeta_elem],
+                    ],
+                    [
+                        [np.array([xi[-1]]), eta_elem, zeta],
+                        [np.array([xi[-1]]), eta, zeta_elem],
+                    ],
+                ],
+            ]
             for XI_face_pair, XI_elem_borders_pair in zip(XI_faces, XI_elem_borders):
-                for XI_face, (XI_elem_border_a, XI_elem_border_b) in zip(XI_face_pair, XI_elem_borders_pair):
+                for XI_face, (XI_elem_border_a, XI_elem_border_b) in zip(
+                    XI_face_pair, XI_elem_borders_pair
+                ):
                     x, y, z = np.squeeze(np.array(self.__call__(ctrl_pts, XI_face)))
-                    x_a, y_a, z_a = np.squeeze(np.array(self.__call__(ctrl_pts, XI_elem_border_a)))
-                    x_b, y_b, z_b = np.squeeze(np.array(self.__call__(ctrl_pts, XI_elem_border_b)))
-                    pv_plotter.add_mesh(pv.StructuredGrid(x, y, z), color=interior_color, opacity=0.5)
-                    lines_xi = np.repeat(np.stack((x_a, y_a, z_a)).transpose(1, 2, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
-                    lines_eta = np.repeat(np.stack((x_b, y_b, z_b)).transpose(2, 1, 0), 2, axis=1)[:, 1:-1].reshape((-1, 3))
+                    x_a, y_a, z_a = np.squeeze(
+                        np.array(self.__call__(ctrl_pts, XI_elem_border_a))
+                    )
+                    x_b, y_b, z_b = np.squeeze(
+                        np.array(self.__call__(ctrl_pts, XI_elem_border_b))
+                    )
+                    pv_plotter.add_mesh(
+                        pv.StructuredGrid(x, y, z), color=interior_color, opacity=0.5
+                    )
+                    lines_xi = np.repeat(
+                        np.stack((x_a, y_a, z_a)).transpose(1, 2, 0), 2, axis=1
+                    )[:, 1:-1].reshape((-1, 3))
+                    lines_eta = np.repeat(
+                        np.stack((x_b, y_b, z_b)).transpose(2, 1, 0), 2, axis=1
+                    )[:, 1:-1].reshape((-1, 3))
                     lines = np.concatenate((lines_xi, lines_eta), axis=0)
-                    pv_plotter.add_lines(lines, connected=False, color=elem_color, width=2)
-            pv_plotter.add_points(ctrl_pts.reshape((3, -1)).T, color=ctrl_color, point_size=8, render_points_as_spheres=True)
+                    pv_plotter.add_lines(
+                        lines, connected=False, color=elem_color, width=2
+                    )
+            pv_plotter.add_points(
+                ctrl_pts.reshape((3, -1)).T,
+                color=ctrl_color,
+                point_size=8,
+                render_points_as_spheres=True,
+            )
         else:
             raise ValueError(f"Can't plot a {self.NPa}D shape in a 3D space.")
         if show:
