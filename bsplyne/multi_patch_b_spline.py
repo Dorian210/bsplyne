@@ -6,6 +6,7 @@ from typing import Iterable, Union, Literal
 import numpy as np
 import numba as nb
 import meshio as io
+from scipy.spatial import cKDTree
 
 from .b_spline import BSpline
 from .b_spline_basis import BSplineBasis
@@ -162,32 +163,45 @@ class MultiPatchBSplineConnectivity:
         shape_by_patch = np.array(
             [ctrlPts.shape[1:] for ctrlPts in separated_ctrlPts], dtype="int"
         )
+        
+        ctrlPts = np.hstack([pts.reshape((NPh, -1)) for pts in separated_ctrlPts])
+        tree = cKDTree(ctrlPts.T)
+        matches = tree.query_ball_tree(tree, r=eps)
+        connex = set()
+        for match in matches:
+            if len(match) > 1:
+                connex.add(tuple(sorted(match)))
         nodes_couples = []
-        previous_pts = separated_ctrlPts[0].reshape((NPh, -1))
-        previous_inds_counter = previous_pts.shape[1]
-        previous_inds = np.arange(previous_inds_counter)
-        for ctrlPts in separated_ctrlPts[1:]:
-            # create current pts and inds
-            current_pts = ctrlPts.reshape((NPh, -1))
-            current_inds_counter = previous_inds_counter + current_pts.shape[1]
-            current_inds = np.arange(previous_inds_counter, current_inds_counter)
-            # get couples
-            dist = np.linalg.norm(
-                previous_pts[:, :, None] - current_pts[:, None, :], axis=0
-            )
-            previous_inds_inds, current_inds_inds = (dist < eps).nonzero()
-            nodes_couples.append(
-                np.hstack(
-                    (
-                        previous_inds[previous_inds_inds, None],
-                        current_inds[current_inds_inds, None],
-                    )
-                )
-            )
-            # add current to previous for next iteration
-            previous_pts = np.hstack((previous_pts, current_pts))
-            previous_inds_counter = current_inds_counter
-            previous_inds = np.hstack((previous_inds, current_inds))
+        for tup in connex:
+            tup = np.array(tup)
+            nodes_couples.append(np.stack((tup[:-1], tup[1:])).T)
+        
+        # nodes_couples = []
+        # previous_pts = separated_ctrlPts[0].reshape((NPh, -1))
+        # previous_inds_counter = previous_pts.shape[1]
+        # previous_inds = np.arange(previous_inds_counter)
+        # for ctrlPts in separated_ctrlPts[1:]:
+        #     # create current pts and inds
+        #     current_pts = ctrlPts.reshape((NPh, -1))
+        #     current_inds_counter = previous_inds_counter + current_pts.shape[1]
+        #     current_inds = np.arange(previous_inds_counter, current_inds_counter)
+        #     # get couples
+        #     dist = np.linalg.norm(
+        #         previous_pts[:, :, None] - current_pts[:, None, :], axis=0
+        #     )
+        #     previous_inds_inds, current_inds_inds = (dist < eps).nonzero()
+        #     nodes_couples.append(
+        #         np.hstack(
+        #             (
+        #                 previous_inds[previous_inds_inds, None],
+        #                 current_inds[current_inds_inds, None],
+        #             )
+        #         )
+        #     )
+        #     # add current to previous for next iteration
+        #     previous_pts = np.hstack((previous_pts, current_pts))
+        #     previous_inds_counter = current_inds_counter
+        #     previous_inds = np.hstack((previous_inds, current_inds))
         if len(nodes_couples) > 0:
             nodes_couples = np.vstack(nodes_couples)
         else:
