@@ -163,7 +163,7 @@ class MultiPatchBSplineConnectivity:
         shape_by_patch = np.array(
             [ctrlPts.shape[1:] for ctrlPts in separated_ctrlPts], dtype="int"
         )
-        
+
         ctrlPts = np.hstack([pts.reshape((NPh, -1)) for pts in separated_ctrlPts])
         tree = cKDTree(ctrlPts.T)
         matches = tree.query_ball_tree(tree, r=eps)
@@ -175,7 +175,7 @@ class MultiPatchBSplineConnectivity:
         for tup in connex:
             tup = np.array(tup)
             nodes_couples.append(np.stack((tup[:-1], tup[1:])).T)
-        
+
         # nodes_couples = []
         # previous_pts = separated_ctrlPts[0].reshape((NPh, -1))
         # previous_inds_counter = previous_pts.shape[1]
@@ -881,6 +881,7 @@ class MultiPatchBSplineConnectivity:
         XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
         verbose: bool = True,
         fields_on_interior_only: Union[bool, Literal["auto"], list[str]] = "auto",
+        disable_parallel: bool = False,
     ) -> tuple[list[io.Mesh], list[io.Mesh], list[io.Mesh]]:
         """
         Generate all mesh representations (interior, element borders, and control points) for a multipatch B-spline geometry.
@@ -930,6 +931,8 @@ class MultiPatchBSplineConnectivity:
             If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'`
             are included on all meshes while others are only included on the interior mesh.
             By default, 'auto'.
+        disable_parallel : bool, optional
+            Wether to disable parallel execution. By default, False.
 
         Returns
         -------
@@ -1020,6 +1023,7 @@ class MultiPatchBSplineConnectivity:
             separated_fields=separated_fields,
             XI_list=XI_list,
             verbose=verbose,
+            parallel=(not disable_parallel),
         )
         if verbose:
             print("interior done")
@@ -1032,6 +1036,7 @@ class MultiPatchBSplineConnectivity:
             separated_fields=separated_fields,
             XI_list=XI_list,
             paraview_sizes=paraview_sizes,
+            parallel=(not disable_parallel),
         )
         if verbose:
             print("elements borders done")
@@ -1065,6 +1070,7 @@ class MultiPatchBSplineConnectivity:
         make_pvd: bool = True,
         verbose: bool = True,
         fields_on_interior_only: Union[bool, Literal["auto"], list[str]] = "auto",
+        disable_parallel: bool = False,
     ):
         """
         Save multipatch B-spline visualization data as Paraview files.
@@ -1148,6 +1154,8 @@ class MultiPatchBSplineConnectivity:
             If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'`
             are included on all meshes while others are only included on the interior mesh.
             By default, 'auto'.
+        disable_parallel : bool, optional
+            Whether to disable the parallel execution. By default, False.
 
         Returns
         -------
@@ -1212,6 +1220,7 @@ class MultiPatchBSplineConnectivity:
                 XI_list,
                 verbose,
                 fields_on_interior_only,
+                disable_parallel=disable_parallel,
             )
         )
 

@@ -1793,7 +1793,8 @@ class BSpline:
         """
         NPa = data["NPa"]
         bases = np.array([BSplineBasis.from_dict(b) for b in data["bases"]])
-        return cls(NPa, bases)
+        assert len(bases) == NPa, "The parametric space must be of size 'NPa'."
+        return cls.from_bases(bases)
 
     def save(self, filepath: str, ctrl_pts: Union[np.ndarray, None] = None) -> None:
         """
