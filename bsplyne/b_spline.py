@@ -1264,6 +1264,8 @@ class BSpline:
         >>> meshes = spline.make_elem_separator_meshes(ctrl_pts)
         >>> mesh = meshes[0]
         """
+        if type(n_eval_per_elem) is int:
+            n_eval_per_elem = [n_eval_per_elem] * self.NPa
         if XI is None:
             XI = self.linspace(n_eval_per_elem)
         interp_points = self(ctrl_pts, XI).reshape((3, -1)).T
