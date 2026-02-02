@@ -1,0 +1,340 @@
+MODULE: bsplyne.geometries_in_3D
+================================
+Documentation du module bsplyne.geometries_in_3D
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+  >>> scale_rotate_translate(pts, scale_vector, axis, angle, translation_vector)
+      Applies a scale, rotation and translation to a set of points.
+      
+      Parameters
+      ----------
+      pts : array_like
+          The points to be transformed.
+      scale_vector : array_like
+          The vector to scale by.
+      axis : array_like
+          The axis to rotate around.
+      angle : float
+          The angle to rotate by in radians.
+      translation_vector : array_like
+          The vector to translate by.
+      
+      Returns
+      -------
+      new_pts : array_like
+          The transformed points.
+
+  >>> new_quarter_circle(center, normal, radius)
+      Creates a B-spline quarter circle from a given center, normal and radius.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the quarter circle.
+      normal : array_like
+          The normal vector of the quarter circle.
+      radius : float
+          The radius of the quarter circle.
+      
+      Returns
+      -------
+      quarter_circle : BSpline
+          The quarter circle.
+      ctrlPts : array_like
+          The control points of the quarter circle.
+
+  >>> new_circle(center, normal, radius)
+      Create a B-spline circle in 3D space.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the circle.
+      normal : array_like
+          The normal vector of the circle.
+      radius : float
+          The radius of the circle.
+      
+      Returns
+      -------
+      circle : BSpline
+          The circle.
+      ctrlPts : array_like
+          The control points of the circle.
+
+  >>> new_disk(center, normal, radius)
+      Creates a B-spline disk from a given center, normal and radius.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the disk.
+      normal : array_like
+          The normal vector of the disk.
+      radius : float
+          The radius of the disk.
+      
+      Returns
+      -------
+      disk : BSpline
+          The disk.
+      ctrlPts : array_like
+          The control points of the disk.
+
+  >>> new_degenerated_disk(center, normal, radius)
+      Creates a B-spline degenerated disk from a given center, normal and radius.
+      The disk is degenerated as it is created by "blowing" a square into a circle.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the degenerated disk.
+      normal : array_like
+          The normal vector of the degenerated disk.
+      radius : float
+          The radius of the degenerated disk.
+      
+      Returns
+      -------
+      disk : BSpline
+          The degenerated disk.
+      ctrlPts : array_like
+          The control points of the degenerated disk.
+
+  >>> new_quarter_pipe(center_front, orientation, radius, length)
+      Creates a B-spline quarter pipe from a given center, orientation, radius and length.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the quarter pipe.
+      orientation : array_like
+          The normal vector of the quarter pipe.
+      radius : float
+          The radius of the quarter pipe.
+      length : float
+          The length of the quarter pipe.
+      
+      Returns
+      -------
+      quarter_pipe : BSpline
+          The quarter pipe.
+      ctrlPts : array_like
+          The control points of the quarter pipe.
+
+  >>> new_pipe(center_front, orientation, radius, length)
+      Creates a B-spline pipe from a given center, orientation, radius and length.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the pipe.
+      orientation : array_like
+          The normal vector of the pipe.
+      radius : float
+          The radius of the pipe.
+      length : float
+          The length of the pipe.
+      
+      Returns
+      -------
+      pipe : BSpline
+          The pipe.
+      ctrlPts : array_like
+          The control points of the pipe.
+
+  >>> new_quarter_cylinder(center_front, orientation, radius, length)
+      Creates a B-spline quarter cylinder from a given center, orientation, radius and length.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the quarter cylinder.
+      orientation : array_like
+          The normal vector of the quarter cylinder.
+      radius : float
+          The radius of the quarter cylinder.
+      length : float
+          The length of the quarter cylinder.
+      
+      Returns
+      -------
+      quarter_cylinder : BSpline
+          The quarter cylinder.
+      ctrlPts : array_like
+          The control points of the quarter cylinder.
+
+  >>> new_cylinder(center_front, orientation, radius, length)
+      Creates a B-spline cylinder from a given center, orientation, radius and length.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the cylinder.
+      orientation : array_like
+          The normal vector of the cylinder.
+      radius : float
+          The radius of the cylinder.
+      length : float
+          The length of the cylinder.
+      
+      Returns
+      -------
+      cylinder : BSpline
+          The cylinder.
+      ctrlPts : array_like
+          The control points of the cylinder.
+
+  >>> new_degenerated_cylinder(center_front, orientation, radius, length)
+      Creates a B-spline cylinder from a given center, orientation, radius and length.
+      The cylinder is degenerated as it is created by "blowing" a square into a circle
+      before extruding it into a cylinder.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the cylinder.
+      orientation : array_like
+          The normal vector of the cylinder.
+      radius : float
+          The radius of the cylinder.
+      length : float
+          The length of the cylinder.
+      
+      Returns
+      -------
+      cylinder : BSpline
+          The cylinder.
+      ctrlPts : array_like
+          The control points of the cylinder.
+
+  >>> new_closed_circle(center, normal, radius)
+      Creates a B-spline circle from a given center, normal and radius.
+      The circle is closed as it the junction between the start and the end of the
+      parametric space spans enough elements to conserve the C^(p-1) continuity.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the circle.
+      normal : array_like
+          The normal vector of the circle.
+      radius : float
+          The radius of the circle.
+      
+      Returns
+      -------
+      circle : BSpline
+          The circle.
+      ctrlPts : array_like
+          The control points of the circle.
+
+  >>> new_closed_disk(center, normal, radius)
+      Creates a B-spline disk from a given center, normal and radius.
+      The disk is closed as it the junction between the start and the end of the
+      parametric space spans enough elements to conserve the C^(p-1) continuity.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the disk.
+      normal : array_like
+          The normal vector of the disk.
+      radius : float
+          The radius of the disk.
+      
+      Returns
+      -------
+      disk : BSpline
+          The disk.
+      ctrlPts : array_like
+          The control points of the disk.
+
+  >>> new_closed_pipe(center_front, orientation, radius, length)
+      Creates a B-spline closed pipe from a given center, orientation, radius and length.
+      The pipe is closed as the junction between the start and the end of the
+      parametric space along the circular direction spans enough elements to conserve the
+      C^(p-1) continuity.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the pipe.
+      orientation : array_like
+          The normal vector of the pipe.
+      radius : float
+          The radius of the pipe.
+      length : float
+          The length of the pipe.
+      
+      Returns
+      -------
+      pipe : BSpline
+          The pipe.
+      ctrlPts : array_like
+          The control points of the pipe.
+
+  >>> new_closed_cylinder(center_front, orientation, radius, length)
+      Creates a B-spline closed cylinder from a given center, orientation, radius and length.
+      The cylinder is closed as the junction between the start and the end of the
+      parametric space along the circular direction spans enough elements to conserve the
+      C^(p-1) continuity.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the closed cylinder.
+      orientation : array_like
+          The normal vector of the closed cylinder.
+      radius : float
+          The radius of the closed cylinder.
+      length : float
+          The length of the closed cylinder.
+      
+      Returns
+      -------
+      closed_cylinder : BSpline
+          The closed cylinder.
+      ctrlPts : array_like
+          The control points of the closed cylinder.
+
+  >>> new_quarter_strut(center_front, orientation, radius, length)
+      Creates a B-spline quarter strut from a given center, orientation, radius and length.
+      
+      Parameters
+      ----------
+      center_front : array_like
+          The center of the front of the quarter strut.
+      orientation : array_like
+          The normal vector of the quarter strut.
+      radius : float
+          The radius of the quarter strut.
+      length : float
+          The length of the quarter strut.
+      
+      Returns
+      -------
+      quarter_strut : BSpline
+          The quarter strut.
+      ctrlPts : array_like
+          The control points of the quarter strut.
+
+  >>> new_cube(center, orientation, side_length)
+      Creates a B-spline cube from a given center, orientation and side length.
+      
+      Parameters
+      ----------
+      center : array_like
+          The center of the cube.
+      orientation : array_like
+          The normal vector of the cube.
+      side_length : float
+          The side length of the cube.
+      
+      Returns
+      -------
+      cube : BSpline
+          The cube.
+      ctrlPts : array_like
+          The control points of the cube.

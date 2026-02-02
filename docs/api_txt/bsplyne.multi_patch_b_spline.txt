@@ -1,0 +1,548 @@
+MODULE: bsplyne.multi_patch_b_spline
+====================================
+Documentation du module bsplyne.multi_patch_b_spline
+
+CLASSE: MultiPatchBSplineConnectivity
+-------------------------------------
+Contains all the methods to link multiple B-spline patches.
+It uses 3 representations of the data :
+  - a unique representation, possibly common with other meshes, containing
+    only unique nodes indices,
+  - a unpacked representation containing duplicated nodes indices,
+  - a separated representation containing duplicated nodes indices,
+    separated between patches. It is here for user friendliness.
+
+Attributes
+----------
+unique_nodes_inds : numpy.ndarray of int
+    The indices of the unique representation needed to create the unpacked one.
+shape_by_patch : numpy.ndarray of int
+    The shape of the separated nodes by patch.
+nb_nodes : int
+    The total number of unpacked nodes.
+nb_unique_nodes : int
+    The total number of unique nodes.
+nb_patchs : int
+    The number of patches.
+npa : int
+    The dimension of the parametric space of the B-splines.
+
+  >>> __init__(self, unique_nodes_inds, shape_by_patch, nb_unique_nodes)
+      Parameters
+      ----------
+      unique_nodes_inds : numpy.ndarray of int
+          The indices of the unique representation needed to create the unpacked one.
+      shape_by_patch : numpy.ndarray of int
+          The shape of the separated nodes by patch.
+      nb_unique_nodes : int
+          The total number of unique nodes.
+
+  >>> from_nodes_couples(cls, nodes_couples, shape_by_patch)
+      Create the connectivity from a list of couples of unpacked nodes.
+      
+      Parameters
+      ----------
+      nodes_couples : numpy.ndarray of int
+          Couples of indices of unpacked nodes that are considered the same.
+          Its shape should be (# of couples, 2)
+      shape_by_patch : numpy.ndarray of int
+          The shape of the separated nodes by patch.
+      
+      Returns
+      -------
+      MultiPatchBSplineConnectivity
+          Instance of `MultiPatchBSplineConnectivity` created.
+
+  >>> from_separated_ctrlPts(
+    cls,
+    separated_ctrlPts,
+    eps=1e-10,
+    return_nodes_couples: bool = False
+)
+      Create the connectivity from a list of control points given as
+      a separated field by comparing every couple of points.
+      
+      Parameters
+      ----------
+      separated_ctrlPts : list of numpy.ndarray of float
+          Control points of every patch to be compared in the separated
+          representation. Every array is of shape :
+          (``NPh``, nb elem for dim 1, ..., nb elem for dim ``npa``)
+      eps : float, optional
+          Maximum distance between two points to be considered the same, by default 1e-10
+      return_nodes_couples : bool, optional
+          If `True`, returns the `nodes_couples` created, by default False
+      
+      Returns
+      -------
+      MultiPatchBSplineConnectivity
+          Instance of `MultiPatchBSplineConnectivity` created.
+
+  >>> unpack(self, unique_field)
+      Extract the unpacked representation from a unique representation.
+      
+      Parameters
+      ----------
+      unique_field : numpy.ndarray
+          The unique representation. Its shape should be :
+          (field, shape, ..., `self`.`nb_unique_nodes`)
+      
+      Returns
+      -------
+      unpacked_field : numpy.ndarray
+          The unpacked representation. Its shape is :
+          (field, shape, ..., `self`.`nb_nodes`)
+
+  >>> pack(self, unpacked_field, method='mean')
+      Extract the unique representation from an unpacked representation.
+      
+      Parameters
+      ----------
+      unpacked_field : numpy.ndarray
+          The unpacked representation. Its shape should be :
+          (field, shape, ..., `self`.`nb_nodes`)
+      method: str
+          The method used to group values that could be different
+      
+      Returns
+      -------
+      unique_nodes : numpy.ndarray
+          The unique representation. Its shape is :
+          (field, shape, ..., `self`.`nb_unique_nodes`)
+
+  >>> separate(self, unpacked_field)
+      Extract the separated representation from an unpacked representation.
+      
+      Parameters
+      ----------
+      unpacked_field : numpy.ndarray
+          The unpacked representation. Its shape is :
+          (field, shape, ..., `self`.`nb_nodes`)
+      
+      Returns
+      -------
+      separated_field : list of numpy.ndarray
+          The separated representation. Every array is of shape :
+          (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
+
+  >>> agglomerate(self, separated_field)
+      Extract the unpacked representation from a separated representation.
+      
+      Parameters
+      ----------
+      separated_field : list of numpy.ndarray
+          The separated representation. Every array is of shape :
+          (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
+      
+      Returns
+      -------
+      unpacked_field : numpy.ndarray
+          The unpacked representation. Its shape is :
+          (field, shape, ..., `self`.`nb_nodes`)
+
+  >>> unique_field_indices(self, field_shape, representation='separated')
+      Get the unique, unpacked or separated representation of a field's unique indices.
+      
+      Parameters
+      ----------
+      field_shape : tuple of int
+          The shape of the field. For example, if it is a vector field, `field_shape`
+          should be (3,). If it is a second order tensor field, it should be (3, 3).
+      representation : str, optional
+          The user must choose between `"unique"`, `"unpacked"`, and `"separated"`.
+          It corresponds to the type of representation to get, by default "separated"
+      
+      Returns
+      -------
+      unique_field_indices : numpy.ndarray of int or list of numpy.ndarray of int
+          The unique, unpacked or separated representation of a field's unique indices.
+          If unique, its shape is (*`field_shape`, `self`.`nb_unique_nodes`).
+          If unpacked, its shape is : (*`field_shape`, `self`.`nb_nodes`).
+          If separated, every array is of shape : (*`field_shape`, nb elem for dim 1, ..., nb elem for dim `npa`).
+
+  >>> get_duplicate_unpacked_nodes_mask(self)
+      Returns a boolean mask indicating which nodes in the unpacked representation are duplicates.
+      
+      Returns
+      -------
+      duplicate_nodes_mask : numpy.ndarray
+          Boolean mask of shape (nb_nodes,) where True indicates a node is duplicated
+          across multiple patches and False indicates it appears only once.
+
+  >>> extract_exterior_borders(self, splines)
+      Extract exterior borders from B-spline patches.
+      
+      Parameters
+      ----------
+      splines : list[BSpline]
+          Array of B-spline patches to extract borders from.
+      
+      Returns
+      -------
+      border_connectivity : MultiPatchBSplineConnectivity
+          Connectivity information for the border patches.
+      border_splines : list[BSpline]
+          Array of B-spline patches representing the borders.
+      border_unique_to_self_unique_connectivity : numpy.ndarray of int
+          Array mapping border unique nodes to original unique nodes.
+      
+      Raises
+      ------
+      AssertionError
+          If isoparametric space dimension is less than 2.
+
+  >>> extract_interior_borders(self, splines)
+      Extract interior borders from B-spline patches where nodes are shared between patches.
+      
+      Parameters
+      ----------
+      splines : list[BSpline]
+          Array of B-spline patches to extract borders from.
+      
+      Returns
+      -------
+      border_connectivity : MultiPatchBSplineConnectivity
+          Connectivity information for the border patches.
+      border_splines : list[BSpline]
+          Array of B-spline patches representing the borders.
+      border_unique_to_self_unique_connectivity : numpy.ndarray of int
+          Array mapping border unique nodes to original unique nodes.
+      
+      Raises
+      ------
+      AssertionError
+          If parametric space dimension is less than 2.
+
+  >>> subset(self, splines, patches_to_keep)
+      Create a subset of the multi-patch B-spline connectivity by keeping only selected patches.
+      
+      Parameters
+      ----------
+      splines : list[BSpline]
+          Array of B-spline patches to subset.
+      patches_to_keep : numpy.array of int
+          Indices of patches to keep in the subset.
+      
+      Returns
+      -------
+      new_connectivity : MultiPatchBSplineConnectivity
+          New connectivity object containing only the selected patches.
+      new_splines : list[BSpline]
+          Array of B-spline patches for the selected patches.
+      new_unique_to_self_unique_connectivity : numpy.ndarray of int
+          Array mapping new unique nodes to original unique nodes.
+
+  >>> make_control_poly_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    n_step: int = 1,
+    unique_fields: dict = {},
+    separated_fields: Optional[dict] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    paraview_sizes: dict = {}
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_elem_separator_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    n_step: int = 1,
+    unique_fields: dict = {},
+    separated_fields: Optional[dict] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    paraview_sizes: dict = {},
+    parallel: bool = True,
+    verbose: bool = True
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_elements_interior_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    n_step: int = 1,
+    unique_fields: dict = {},
+    separated_fields: Optional[dict] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    parallel: bool = True,
+    verbose: bool = True
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_all_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_step: int = 1,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    unique_fields: dict = {},
+    separated_fields: Optional[list[dict]] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    verbose: bool = True,
+    fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto',
+    disable_parallel: bool = False
+) -> tuple[list[meshio._mesh.Mesh], list[meshio._mesh.Mesh], list[meshio._mesh.Mesh]]
+      Generate all mesh representations (interior, element borders, and control points) for a multipatch B-spline geometry.
+      
+      This method creates three types of meshes for visualization or analysis:
+      - The interior mesh representing the B-spline surface or volume.
+      - The element separator mesh showing the borders between elements.
+      - The control polygon mesh showing the control structure.
+      
+      Parameters
+      ----------
+      splines : Iterable[BSpline]
+          List of B-spline patches to process.
+      separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+          Control points for each patch in separated representation.
+      n_step : int, optional
+          Number of time steps to generate. By default, 1.
+      n_eval_per_elem : Union[int, Iterable[int]], optional
+          Number of evaluation points per element for each isoparametric dimension.
+          If an `int` is provided, the same number is used for all dimensions.
+          If an `Iterable` is provided, each value corresponds to a different dimension.
+          By default, 10.
+      unique_fields : dict, optional
+          Fields in unique representation to visualize. By default, `{}`.
+          Keys are field names, values are arrays (not callables nor FE fields).
+      separated_fields : Union[list[dict], None], optional
+          Fields to visualize at each time step.
+          List of `self.nb_patchs` dictionaries (one per patch) of format:
+          {
+              "field_name": `field_value`
+          }
+          where `field_value` can be either:
+          1. A `np.ndarray` with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`)
+          2. A `np.ndarray` with shape (`n_step`, `field_size`, `*grid_shape`)
+          3. A function that computes field values (`np.ndarray[np.floating]`) at given points from the `BSpline` instance and `XI`.
+          By default, None.
+      XI_list : Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]], optional
+          Parametric coordinates at which to evaluate the B-spline patches and fields.
+          If not `None`, overrides the `n_eval_per_elem` parameter.
+          If `None`, regular grids are generated according to `n_eval_per_elem`.
+          By default, None.
+      verbose : bool, optional
+          Whether to print progress information. By default, True.
+      fiels_on_interior_only: Union[bool, Literal['auto'], list[str]], optionnal
+          Whether to include fields only on the interior mesh (`True`), on all meshes (`False`),
+          or on specified field names.
+          If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'`
+          are included on all meshes while others are only included on the interior mesh.
+          By default, 'auto'.
+      disable_parallel : bool, optional
+          Wether to disable parallel execution. By default, False.
+      
+      Returns
+      -------
+      tuple[list[io.Mesh], list[io.Mesh], list[io.Mesh]]
+          Tuple containing three lists of `io.Mesh` objects:
+          - Interior meshes for each time step.
+          - Element separator meshes for each time step.
+          - Control polygon meshes for each time step.
+      
+      Raises
+      ------
+      NotImplementedError
+          If a callable is passed in `unique_fields`.
+      ValueError
+          If a field in `unique_fields` does not have the correct shape.
+      
+      Notes
+      -----
+      - The isoparametric space refers to the parametric space of the B-splines.
+      - Fields can be visualized as scalars or vectors.
+      - Supports time-dependent visualization through `n_step`.
+      - Fields in `unique_fields` must be arrays; to use callables, use `separated_fields`.
+      
+      Examples
+      --------
+      >>> interior, borders, control = connectivity.make_all_meshes(splines, separated_ctrl_pts)
+
+  >>> save_paraview(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    path: str,
+    name: str,
+    n_step: int = 1,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    unique_fields: dict = {},
+    separated_fields: Optional[list[dict]] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    groups: Optional[dict[str, dict[str, Union[str, int]]]] = None,
+    make_pvd: bool = True,
+    verbose: bool = True,
+    fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto',
+    disable_parallel: bool = False
+)
+      Save multipatch B-spline visualization data as Paraview files.
+      
+      This method generates three types of visualization files for a multipatch B-spline geometry:
+      - Interior mesh showing the B-spline surface/volume
+      - Element borders showing the mesh structure
+      - Control points mesh showing the control structure
+      
+      All files are saved in VTU format, with an optional PVD file to group them for Paraview.
+      
+      Parameters
+      ----------
+      splines : Iterable[BSpline]
+          List of B-spline patches to save.
+      separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+          Control points for each patch in separated representation.
+      path : str
+          Directory path where the files will be saved.
+      name : str
+          Base name for the output files.
+      n_step : int, optional
+          Number of time steps to save. By default, 1.
+      n_eval_per_elem : Union[int, Iterable[int]], optional
+          Number of evaluation points per element for each isoparametric dimension.
+          If an `int` is provided, the same number is used for all dimensions.
+          If an `Iterable` is provided, each value corresponds to a different dimension.
+          By default, 10.
+      unique_fields : dict, optional
+          Fields in unique representation to save. By default, `{}`.
+          Keys are field names, values are arrays (not callables nor FE fields).
+      separated_fields : Union[list[dict], None], optional
+          Fields to visualize at each time step.
+          List of `self.nb_patchs` dictionaries (one per patch) of format:
+          {
+              "field_name": `field_value`
+          }
+          where `field_value` can be either:
+      
+          1. A numpy array with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`) where:
+          - `n_step`: Number of time steps
+          - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
+          - `self.shape_by_patch[patch]`: Same shape as the patch's control points grid (excluding `NPh`)
+      
+          2. A numpy array with shape (`n_step`, `field_size`, `*grid_shape`) where:
+          - `n_step`: Number of time steps
+          - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
+          - `*grid_shape`: Shape of the evaluation grid (number of points along each isoparametric axis)
+      
+          3. A function that computes field values (`np.ndarray[np.floating]`) at given
+          points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
+          points for each dimension (`tuple[np.ndarray[np.floating], ...]`).
+          The result should be an array of shape (`n_step`, `n_points`, `field_size`) where:
+          - `n_step`: Number of time steps
+          - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
+          - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
+      
+          By default, None.
+      XI_list : Iterable[tuple[np.ndarray[np.floating], ...]], optional
+          Parametric coordinates at which to evaluate the B-spline patches and fields.
+          If not `None`, overrides the `n_eval_per_elem` parameter.
+          If `None`, regular grids are generated according to `n_eval_per_elem`.
+      groups : Union[dict[str, dict[str, Union[str, int]]], None], optional
+          Nested dictionary specifying file groups for PVD organization. Format:
+          {
+              "group_name": {
+                  "ext": str,     # File extension (e.g., "vtu")
+                  "npart": int,   # Number of parts in the group
+                  "nstep": int    # Number of timesteps
+              }
+          }
+          If provided, existing groups are updated; if `None`, groups are created automatically.
+          By default, `None`.
+      make_pvd : bool, optional
+          Whether to create a PVD file grouping all VTU files. By default, `True`.
+      verbose : bool, optional
+          Whether to print progress information. By default, `True`.
+      fields_on_interior_only: Union[bool, Literal['auto'], list[str]], optionnal
+          Whether to include fields only on the interior mesh (`True`), on all meshes (`False`),
+          or on specified field names.
+          If set to `'auto'`, fields named `'u'`, `'U'`, `'displacement'` or `'displ'`
+          are included on all meshes while others are only included on the interior mesh.
+          By default, 'auto'.
+      disable_parallel : bool, optional
+          Whether to disable the parallel execution. By default, False.
+      
+      Returns
+      -------
+      groups : dict[str, dict[str, Union[str, int]]]
+          Updated groups dictionary with information about saved files.
+      
+      Raises
+      ------
+      NotImplementedError
+          If a callable is passed in `unique_fields`.
+      ValueError
+          If the multiprocessing pool is not running and cannot be restarted.
+      
+      Notes
+      -----
+      - Creates three types of VTU files for each time step:
+          - {name}_interior_{part}_{step}.vtu
+          - {name}_elements_borders_{part}_{step}.vtu
+          - {name}_control_points_{part}_{step}.vtu
+      - If `make_pvd=True`, creates a PVD file named {name}.pvd.
+      - Fields can be visualized as scalars or vectors in Paraview.
+      - The method supports time-dependent visualization through `n_step`.
+      - Fields in `unique_fields` must be arrays; to use callables, use `separated_fields`.
+      
+      Examples
+      --------
+      Save a multipatch B-spline visualization:
+      >>> connectivity.save_paraview(splines, separated_ctrl_pts, "./output", "multipatch")
+      
+      Save with a custom separated field on a 2 patches multipatch:
+      >>> fields = [{"temperature": np.random.rand(1, 4, 4)}, {"temperature": np.random.rand(1, 7, 3)}]
+      >>> connectivity.save_paraview(splines, separated_ctrl_pts, "./output", "multipatch", separated_fields=fields)
+
+
+CLASSE: CouplesBSplineBorder
+----------------------------
+
+
+  >>> __init__(
+    self,
+    spline1_inds,
+    spline2_inds,
+    axes1,
+    axes2,
+    front_sides1,
+    front_sides2,
+    transpose_2_to_1,
+    flip_2_to_1,
+    NPa
+)
+
+  >>> extract_border_pts(cls, field, axis, front_side, field_dim=1, offset=0)
+
+  >>> extract_border_spline(cls, spline, axis, front_side)
+
+  >>> transpose_and_flip(cls, field, transpose, flip, field_dim=1)
+
+  >>> transpose_and_flip_knots(cls, knots, spans, transpose, flip)
+
+  >>> transpose_and_flip_back_knots(cls, knots, spans, transpose, flip)
+
+  >>> transpose_and_flip_spline(cls, spline, transpose, flip)
+
+  >>> from_splines(cls, separated_ctrl_pts, splines)
+
+  >>> append(self, other)
+
+  >>> get_operator_allxi1_to_allxi2(self, spans1, spans2, couple_ind)
+
+  >>> get_connectivity(self, shape_by_patch)
+
+  >>> get_borders_couples(self, separated_field, offset=0)
+
+  >>> get_borders_couples_splines(self, splines)
+
+  >>> compute_border_couple_DN(
+    self,
+    couple_ind: int,
+    splines: list[bsplyne.b_spline.BSpline],
+    XI1_border: list[numpy.ndarray],
+    k1: list[int]
+)
+
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~

@@ -1,0 +1,577 @@
+================================================================
+DOCUMENTATION COMPLÈTE DE L'API : BSPLYNE
+================================================================
+
+
+
+MODULE: bsplyne
+===============
+.. include:: ../README.md
+
+################################################################
+MODULE: bsplyne.b_spline
+========================
+Documentation du module bsplyne.b_spline
+
+CLASSE: BSpline
+---------------
+BSpline class for representing and manipulating B-spline curves, surfaces and volumes.
+
+A class providing functionality for evaluating, manipulating and visualizing B-splines of arbitrary dimension.
+Supports knot insertion, order elevation, and visualization through Paraview and Matplotlib.
+
+Attributes
+----------
+NPa : int
+    Dimension of the isoparametric space.
+bases : np.ndarray[BSplineBasis]
+    Array containing `BSplineBasis` instances for each isoparametric dimension.
+
+Notes
+-----
+- Supports B-splines of arbitrary dimension (curves, surfaces, volumes, etc.)
+- Provides methods for evaluation, derivatives, refinement and visualization
+- Uses Cox-de Boor recursion formulas for efficient basis function evaluation
+- Visualization available through Paraview (VTK) and Matplotlib
+
+See Also
+--------
+`BSplineBasis` : Class representing one-dimensional B-spline basis functions
+`numpy.ndarray` : Array type used for control points and evaluations
+`scipy.sparse` : Sparse matrix formats used for basis function evaluations
+
+  >>> __init__(
+    self,
+    degrees: Iterable[int],
+    knots: Iterable[numpy.ndarray[numpy.floating]]
+)
+
+  >>> from_bases(
+    cls,
+    bases: Iterable[bsplyne.b_spline_basis.BSplineBasis]
+) -> bsplyne.b_spline.BSpline
+
+  >>> getDegrees(self) -> numpy.ndarray[numpy.integer]
+
+  >>> getKnots(self) -> list[numpy.ndarray[numpy.floating]]
+
+  >>> getCtrlShape(self) -> tuple[int]
+
+  >>> getNbFunc(self) -> int
+
+  >>> getSpans(self) -> list[tuple[float, float]]
+
+  >>> linspace(
+    self,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10
+) -> tuple[numpy.ndarray[numpy.floating], ...]
+
+  >>> linspace_for_integration(
+    self,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    bounding_box: Optional[Iterable] = None
+) -> tuple[tuple[numpy.ndarray[numpy.floating], ...], tuple[numpy.ndarray[numpy.floating], ...]]
+
+  >>> gauss_legendre_for_integration(
+    self,
+    n_eval_per_elem: Union[int, Iterable[int], NoneType] = None,
+    bounding_box: Optional[Iterable] = None
+) -> tuple[tuple[numpy.ndarray[numpy.floating], ...], tuple[numpy.ndarray[numpy.floating], ...]]
+
+  >>> normalize_knots(self)
+
+  >>> DN(
+    self,
+    XI: Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], ...]],
+    k: Union[int, Iterable[int]] = 0
+) -> Union[scipy.sparse._matrix.spmatrix, numpy.ndarray[scipy.sparse._matrix.spmatrix]]
+
+  >>> __call__(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    XI: Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], ...]],
+    k: Union[int, Iterable[int]] = 0
+) -> numpy.ndarray[numpy.floating]
+
+  >>> knotInsertion(
+    self,
+    ctrl_pts: Optional[numpy.ndarray[numpy.floating]],
+    knots_to_add: Iterable[Union[numpy.ndarray[numpy.float64], int]]
+) -> numpy.ndarray[numpy.floating]
+
+  >>> orderElevation(
+    self,
+    ctrl_pts: Optional[numpy.ndarray[numpy.floating]],
+    t: Iterable[int]
+) -> numpy.ndarray[numpy.floating]
+
+  >>> greville_abscissa(
+    self,
+    return_weights: bool = False
+) -> Union[list[numpy.ndarray[numpy.floating]], tuple[list[numpy.ndarray[numpy.floating]], list[numpy.ndarray[numpy.floating]]]]
+
+  >>> make_control_poly_meshes(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    n_step: int = 1,
+    fields: dict = {},
+    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None,
+    paraview_sizes: dict = {}
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_elem_separator_meshes(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    n_step: int = 1,
+    fields: dict = {},
+    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None,
+    paraview_sizes: dict = {}
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_elements_interior_meshes(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    n_step: int = 1,
+    fields: dict = {},
+    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None
+) -> list[meshio._mesh.Mesh]
+
+  >>> saveParaview(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    path: str,
+    name: str,
+    n_step: int = 1,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    fields: Optional[dict] = None,
+    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None,
+    groups: Optional[dict[str, dict[str, Union[str, int]]]] = None,
+    make_pvd: bool = True,
+    verbose: bool = True,
+    fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto'
+) -> dict[str, dict[str, typing.Union[str, int]]]
+
+  >>> getGeomdl(self, ctrl_pts)
+
+  >>> to_dict(self) -> dict
+
+  >>> from_dict(cls, data: dict) -> bsplyne.b_spline.BSpline
+
+  >>> save(self, filepath: str, ctrl_pts: Optional[numpy.ndarray] = None) -> None
+
+  >>> load(
+    cls,
+    filepath: str
+) -> Union[bsplyne.b_spline.BSpline, tuple[bsplyne.b_spline.BSpline, numpy.ndarray]]
+
+  >>> plot(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    plotter: Union[matplotlib.axes._axes.Axes, ForwardRef('pv.Plotter'), NoneType] = None,
+    ctrl_color: str = '#d95f02',
+    interior_color: str = '#666666',
+    elem_color: str = '#7570b3',
+    border_color: str = '#1b9e77',
+    language: Union[Literal['english'], Literal['français']] = 'english',
+    show: bool = True
+) -> Union[matplotlib.axes._axes.Axes, ForwardRef('pv.Plotter'), NoneType]
+
+  >>> plotMPL(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ax: Optional[matplotlib.axes._axes.Axes] = None,
+    ctrl_color: str = '#1b9e77',
+    interior_color: str = '#7570b3',
+    elem_color: str = '#666666',
+    border_color: str = '#d95f02',
+    language: Union[Literal['english'], Literal['français']] = 'english',
+    show: bool = True
+) -> Optional[matplotlib.axes._axes.Axes]
+
+  >>> plotPV(
+    self,
+    ctrl_pts: numpy.ndarray[numpy.floating],
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    pv_plotter: Optional[ForwardRef('pv.Plotter')] = None,
+    ctrl_color: str = '#d95f02',
+    interior_color: str = '#666666',
+    elem_color: str = '#7570b3',
+    border_color: str = '#1b9e77',
+    show: bool = True
+) -> Optional[ForwardRef('pv.Plotter')]
+
+
+################################################################
+MODULE: bsplyne.b_spline_basis
+==============================
+Documentation du module bsplyne.b_spline_basis
+
+CLASSE: BSplineBasis
+--------------------
+BSpline basis in 1D.
+
+A class representing a one-dimensional B-spline basis with functionality for evaluation,
+manipulation and visualization of basis functions. Provides methods for basis function
+evaluation, derivatives computation, knot insertion, order elevation, and integration
+point generation.
+
+Attributes
+----------
+p : int
+    Degree of the polynomials composing the basis.
+knot : np.ndarray[np.floating]
+    Knot vector defining the B-spline basis. Contains non-decreasing sequence
+    of isoparametric coordinates.
+m : int
+    Last index of the knot vector (size - 1).
+n : int
+    Last index of the basis functions. When evaluated, returns an array of size
+    `n + 1`.
+span : tuple[float, float]
+    Interval of definition of the basis `(knot[p], knot[m - p])`.
+
+Notes
+-----
+The basis functions are defined over the isoparametric space specified by the knot vector.
+Basis function evaluation and manipulation methods use efficient algorithms based on
+Cox-de Boor recursion formulas.
+
+See Also
+--------
+`numpy.ndarray` : Array type used for knot vector storage
+`scipy.sparse` : Sparse matrix formats used for basis function evaluations
+
+  >>> __init__(self, p: int, knot: Iterable[float])
+
+  >>> linspace(self, n_eval_per_elem: int = 10) -> numpy.ndarray[numpy.floating]
+
+  >>> linspace_for_integration(
+    self,
+    n_eval_per_elem: int = 10,
+    bounding_box: Optional[tuple[float, float]] = None
+) -> tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]
+
+  >>> gauss_legendre_for_integration(
+    self,
+    n_eval_per_elem: Optional[int] = None,
+    bounding_box: Optional[tuple[float, float]] = None
+) -> tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]
+
+  >>> normalize_knots(self)
+
+  >>> N(
+    self,
+    XI: numpy.ndarray[numpy.floating],
+    k: int = 0
+) -> scipy.sparse._coo.coo_matrix
+
+  >>> to_dict(self) -> dict
+
+  >>> from_dict(cls, data: dict) -> bsplyne.b_spline_basis.BSplineBasis
+
+  >>> save(self, filepath: str) -> None
+
+  >>> load(cls, filepath: str) -> bsplyne.b_spline_basis.BSplineBasis
+
+  >>> plotN(self, k: int = 0, show: bool = True)
+
+  >>> knotInsertion(
+    self,
+    knots_to_add: numpy.ndarray[numpy.floating]
+) -> scipy.sparse._coo.coo_matrix
+
+  >>> orderElevation(self, t: int) -> scipy.sparse._coo.coo_matrix
+
+  >>> greville_abscissa(
+    self,
+    return_weights: bool = False
+) -> Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]]
+
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+################################################################
+MODULE: bsplyne.geometries_in_3D
+================================
+Documentation du module bsplyne.geometries_in_3D
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+  >>> scale_rotate_translate(pts, scale_vector, axis, angle, translation_vector)
+
+  >>> new_quarter_circle(center, normal, radius)
+
+  >>> new_circle(center, normal, radius)
+
+  >>> new_disk(center, normal, radius)
+
+  >>> new_degenerated_disk(center, normal, radius)
+
+  >>> new_quarter_pipe(center_front, orientation, radius, length)
+
+  >>> new_pipe(center_front, orientation, radius, length)
+
+  >>> new_quarter_cylinder(center_front, orientation, radius, length)
+
+  >>> new_cylinder(center_front, orientation, radius, length)
+
+  >>> new_degenerated_cylinder(center_front, orientation, radius, length)
+
+  >>> new_closed_circle(center, normal, radius)
+
+  >>> new_closed_disk(center, normal, radius)
+
+  >>> new_closed_pipe(center_front, orientation, radius, length)
+
+  >>> new_closed_cylinder(center_front, orientation, radius, length)
+
+  >>> new_quarter_strut(center_front, orientation, radius, length)
+
+  >>> new_cube(center, orientation, side_length)
+
+################################################################
+MODULE: bsplyne.multi_patch_b_spline
+====================================
+Documentation du module bsplyne.multi_patch_b_spline
+
+CLASSE: MultiPatchBSplineConnectivity
+-------------------------------------
+Contains all the methods to link multiple B-spline patches.
+It uses 3 representations of the data :
+  - a unique representation, possibly common with other meshes, containing
+    only unique nodes indices,
+  - a unpacked representation containing duplicated nodes indices,
+  - a separated representation containing duplicated nodes indices,
+    separated between patches. It is here for user friendliness.
+
+Attributes
+----------
+unique_nodes_inds : numpy.ndarray of int
+    The indices of the unique representation needed to create the unpacked one.
+shape_by_patch : numpy.ndarray of int
+    The shape of the separated nodes by patch.
+nb_nodes : int
+    The total number of unpacked nodes.
+nb_unique_nodes : int
+    The total number of unique nodes.
+nb_patchs : int
+    The number of patches.
+npa : int
+    The dimension of the parametric space of the B-splines.
+
+  >>> __init__(self, unique_nodes_inds, shape_by_patch, nb_unique_nodes)
+
+  >>> from_nodes_couples(cls, nodes_couples, shape_by_patch)
+
+  >>> from_separated_ctrlPts(
+    cls,
+    separated_ctrlPts,
+    eps=1e-10,
+    return_nodes_couples: bool = False
+)
+
+  >>> unpack(self, unique_field)
+
+  >>> pack(self, unpacked_field, method='mean')
+
+  >>> separate(self, unpacked_field)
+
+  >>> agglomerate(self, separated_field)
+
+  >>> unique_field_indices(self, field_shape, representation='separated')
+
+  >>> get_duplicate_unpacked_nodes_mask(self)
+
+  >>> extract_exterior_borders(self, splines)
+
+  >>> extract_interior_borders(self, splines)
+
+  >>> subset(self, splines, patches_to_keep)
+
+  >>> make_control_poly_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    n_step: int = 1,
+    unique_fields: dict = {},
+    separated_fields: Optional[dict] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    paraview_sizes: dict = {}
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_elem_separator_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    n_step: int = 1,
+    unique_fields: dict = {},
+    separated_fields: Optional[dict] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    paraview_sizes: dict = {},
+    parallel: bool = True,
+    verbose: bool = True
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_elements_interior_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    n_step: int = 1,
+    unique_fields: dict = {},
+    separated_fields: Optional[dict] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    parallel: bool = True,
+    verbose: bool = True
+) -> list[meshio._mesh.Mesh]
+
+  >>> make_all_meshes(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    n_step: int = 1,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    unique_fields: dict = {},
+    separated_fields: Optional[list[dict]] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    verbose: bool = True,
+    fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto',
+    disable_parallel: bool = False
+) -> tuple[list[meshio._mesh.Mesh], list[meshio._mesh.Mesh], list[meshio._mesh.Mesh]]
+
+  >>> save_paraview(
+    self,
+    splines: Iterable[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    path: str,
+    name: str,
+    n_step: int = 1,
+    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    unique_fields: dict = {},
+    separated_fields: Optional[list[dict]] = None,
+    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    groups: Optional[dict[str, dict[str, Union[str, int]]]] = None,
+    make_pvd: bool = True,
+    verbose: bool = True,
+    fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto',
+    disable_parallel: bool = False
+)
+
+
+CLASSE: CouplesBSplineBorder
+----------------------------
+
+
+  >>> __init__(
+    self,
+    spline1_inds,
+    spline2_inds,
+    axes1,
+    axes2,
+    front_sides1,
+    front_sides2,
+    transpose_2_to_1,
+    flip_2_to_1,
+    NPa
+)
+
+  >>> extract_border_pts(cls, field, axis, front_side, field_dim=1, offset=0)
+
+  >>> extract_border_spline(cls, spline, axis, front_side)
+
+  >>> transpose_and_flip(cls, field, transpose, flip, field_dim=1)
+
+  >>> transpose_and_flip_knots(cls, knots, spans, transpose, flip)
+
+  >>> transpose_and_flip_back_knots(cls, knots, spans, transpose, flip)
+
+  >>> transpose_and_flip_spline(cls, spline, transpose, flip)
+
+  >>> from_splines(cls, separated_ctrl_pts, splines)
+
+  >>> append(self, other)
+
+  >>> get_operator_allxi1_to_allxi2(self, spans1, spans2, couple_ind)
+
+  >>> get_connectivity(self, shape_by_patch)
+
+  >>> get_borders_couples(self, separated_field, offset=0)
+
+  >>> get_borders_couples_splines(self, splines)
+
+  >>> compute_border_couple_DN(
+    self,
+    couple_ind: int,
+    splines: list[bsplyne.b_spline.BSpline],
+    XI1_border: list[numpy.ndarray],
+    k1: list[int]
+)
+
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+################################################################
+MODULE: bsplyne.my_wide_product
+===============================
+Documentation du module bsplyne.my_wide_product
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+  >>> my_wide_product(
+    A: scipy.sparse._matrix.spmatrix,
+    B: scipy.sparse._matrix.spmatrix
+) -> scipy.sparse._csr.csr_matrix
+
+################################################################
+MODULE: bsplyne.parallel_utils
+==============================
+Documentation du module bsplyne.parallel_utils
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+  >>> parallel_blocks_inner(
+    funcs: Iterable[Callable],
+    all_args: Iterable[tuple],
+    num_blocks: int,
+    verbose: bool,
+    pbar_title: str,
+    disable_parallel: bool,
+    shared_mem_last_arg: Optional[numpy.ndarray]
+) -> list
+
+  >>> parallel_blocks(
+    funcs: Union[Callable, Iterable[Callable]],
+    all_args: Optional[Iterable[tuple]] = None,
+    num_blocks: Optional[int] = None,
+    verbose: bool = True,
+    pbar_title: str = 'Processing blocks',
+    disable_parallel: bool = False,
+    est_proc_cost: float = 0.5,
+    shared_mem_last_arg: Optional[numpy.ndarray] = None
+) -> list
+
+################################################################
+MODULE: bsplyne.save_utils
+==========================
+Documentation du module bsplyne.save_utils
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+  >>> writePVD(fileName: str, groups: dict[str, dict])
+
+  >>> merge_meshes(meshes: Iterable[meshio._mesh.Mesh]) -> meshio._mesh.Mesh
+
+  >>> merge_saves(
+    path: str,
+    name: str,
+    nb_patchs: int,
+    nb_steps: int,
+    group_names: list[str]
+) -> None

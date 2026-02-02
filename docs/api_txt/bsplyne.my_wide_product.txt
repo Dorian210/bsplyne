@@ -1,0 +1,26 @@
+MODULE: bsplyne.my_wide_product
+===============================
+Documentation du module bsplyne.my_wide_product
+
+FONCTIONS GLOBALES:
+~~~~~~~~~~~~~~~~~~
+  >>> my_wide_product(
+    A: scipy.sparse._matrix.spmatrix,
+    B: scipy.sparse._matrix.spmatrix
+) -> scipy.sparse._csr.csr_matrix
+      Compute a "1D" Kronecker product row by row.
+      
+      For each row i, the result C[i, :] = kron(A[i, :], B[i, :]).
+      Matrices A and B must have the same number of rows.
+      
+      Parameters
+      ----------
+      A : scipy.sparse.spmatrix
+          Input sparse matrix A in CSR format.
+      B : scipy.sparse.spmatrix
+          Input sparse matrix B in CSR format.
+      
+      Returns
+      -------
+      C : scipy.sparse.csr_matrix
+          Resulting sparse matrix in CSR format with shape (A.shape[0], A.shape[1]*B.shape[1]).
