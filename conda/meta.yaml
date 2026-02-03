@@ -1,9 +1,13 @@
+{% set version = "1.0.2" %}
+
 package:
   name: bsplyne
-  version: "1.0.1"
+  version: {{ version }}
 
 source:
-  path: ..
+  url: https://pypi.io/packages/source/b/bsplyne/bsplyne-{{ version }}.tar.gz
+  # curl -L <url> | sha256sum
+  sha256: 509f12c079869bec139f13835688c492ec7d2c13bfbfe6ad586552a01e78cf4d
 
 build:
   noarch: python
