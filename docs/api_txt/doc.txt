@@ -6,7 +6,7 @@ DOCUMENTATION COMPLÈTE DE L'API : BSPLYNE
 
 MODULE: bsplyne
 ===============
-.. include:: ../README.md
+.. include:: ../../README.md
 
 ################################################################
 MODULE: bsplyne.b_spline
@@ -171,14 +171,14 @@ See Also
     self,
     ctrl_pts: numpy.ndarray[numpy.floating],
     n_eval_per_elem: Union[int, Iterable[int]] = 10,
-    plotter: Union[matplotlib.axes._axes.Axes, ForwardRef('pv.Plotter'), NoneType] = None,
+    plotter: Union[matplotlib.axes._axes.Axes, pyvista.plotting.plotter.Plotter, NoneType] = None,
     ctrl_color: str = '#d95f02',
     interior_color: str = '#666666',
     elem_color: str = '#7570b3',
     border_color: str = '#1b9e77',
     language: Union[Literal['english'], Literal['français']] = 'english',
     show: bool = True
-) -> Union[matplotlib.axes._axes.Axes, ForwardRef('pv.Plotter'), NoneType]
+) -> Union[matplotlib.axes._axes.Axes, pyvista.plotting.plotter.Plotter, NoneType]
 
   >>> plotMPL(
     self,
@@ -197,13 +197,13 @@ See Also
     self,
     ctrl_pts: numpy.ndarray[numpy.floating],
     n_eval_per_elem: Union[int, Iterable[int]] = 10,
-    pv_plotter: Optional[ForwardRef('pv.Plotter')] = None,
+    pv_plotter: Optional[pyvista.plotting.plotter.Plotter] = None,
     ctrl_color: str = '#d95f02',
     interior_color: str = '#666666',
     elem_color: str = '#7570b3',
     border_color: str = '#1b9e77',
     show: bool = True
-) -> Optional[ForwardRef('pv.Plotter')]
+) -> Optional[pyvista.plotting.plotter.Plotter]
 
 
 ################################################################
@@ -351,9 +351,9 @@ It uses 3 representations of the data :
 
 Attributes
 ----------
-unique_nodes_inds : numpy.ndarray of int
+unique_nodes_inds : np.ndarray[np.integer]
     The indices of the unique representation needed to create the unpacked one.
-shape_by_patch : numpy.ndarray of int
+shape_by_patch : np.ndarray[np.integer]
     The shape of the separated nodes by patch.
 nb_nodes : int
     The total number of unpacked nodes.

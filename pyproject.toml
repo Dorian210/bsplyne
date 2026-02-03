@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bsplyne"
+version = "1.0.0"
+description = "N-dimensional B-spline library for numerical mechanics and geometry"
+readme = "README.md"
+requires-python = ">=3.9"
+
+authors = [
+    { name = "Dorian Bichet", email = "dbichet@insa-toulouse.fr" }
+]
+
+license = { file = "LICENSE" }
+
+dependencies = [
+    "numpy>=1.20",
+    "numba>=0.55",
+    "scipy>=1.8",
+    "matplotlib>=3.5",
+    "meshio>=5.0",
+    "tqdm>=4.60"
+]
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research"
+]
+
+[project.urls]
+Homepage = "https://github.com/Dorian210/bsplyne"
+Repository = "https://github.com/Dorian210/bsplyne"
+Issues = "https://github.com/Dorian210/bsplyne/issues"
+
+[project.optional-dependencies]
+viz = [
+    "pyvista>=0.41"
+]
+dev = [
+    "build",
+    "twine"
+]
+docs = [
+    "wkhtmltopdf",
+    "pdoc>=12.0"
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -3,7 +3,7 @@ import meshio as io
 from typing import Iterable
 from functools import reduce
 import os
-import xml
+from xml.dom import minidom
 
 
 def writePVD(fileName: str, groups: dict[str, dict]):
@@ -32,7 +32,7 @@ def writePVD(fileName: str, groups: dict[str, dict]):
     None
     """
     rep, fname = os.path.split(fileName)
-    pvd = xml.dom.minidom.Document()
+    pvd = minidom.Document()
     pvd_root = pvd.createElementNS("VTK", "VTKFile")
     pvd_root.setAttribute("type", "Collection")
     pvd_root.setAttribute("version", "0.1")

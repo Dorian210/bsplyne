@@ -1,5 +1,5 @@
 # Path to the package to document
-PACKAGE = ../bsplyne
+PACKAGE = ../src/bsplyne
 
 # Output directory for the documentation
 DOC_DIR = .

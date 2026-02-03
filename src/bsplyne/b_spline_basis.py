@@ -511,7 +511,7 @@ class BSplineBasis:
             Row index of D.
         j : int
             Column index of D.
-        new_knot : numpy.array of float
+        new_knot : np.ndarray[np.floating]
             New knot vector to use.
         p : int
             Degree of the BSpline.
@@ -547,7 +547,7 @@ class BSplineBasis:
 
         Parameters
         ----------
-        new_knot : numpy.array of float
+        new_knot : np.ndarray[np.floating]
             The new knot vector for the knot insertion.
 
         Returns
@@ -802,7 +802,7 @@ def _funcNElemOneXi(i, p, knot, xi):
         Index of the basis function wanted.
     p : int
         Degree of the BSpline evaluated.
-    knot : numpy.array of float
+    knot : np.ndarray[np.floating]
         Knot vector of the BSpline basis.
     xi : float
         Value in the parametric space at which the BSpline is evaluated.
@@ -846,7 +846,7 @@ def _funcDNElemOneXi(i, p, knot, xi, k):
         Index of the basis function wanted.
     p : int
         Degree of the BSpline evaluated.
-    knot : numpy.array of float
+    knot : np.ndarray[np.floating]
         Knot vector of the BSpline basis.
     xi : float
         Value in the parametric space at which the BSpline is evaluated.
@@ -904,7 +904,7 @@ def _findElem(p, m, n, knot, xi):
         Last index of the knot vector.
     n : int
         Last index of the basis.
-    knot : numpy.array of float
+    knot : np.ndarray[np.floating]
         Knot vector of the BSpline basis.
     xi : float
         Value in the parametric space.
@@ -955,16 +955,16 @@ def _DN(p, m, n, knot, XI, k):
         Last index of the knot vector.
     n : int
         Last index of the basis.
-    knot : numpy.array of float
+    knot : np.ndarray[np.floating]
         Knot vector of the BSpline basis.
-    XI : numpy.array of float
+    XI : np.ndarray[np.floating]
         Values in the parametric space at which the BSpline is evaluated.
     k : int
         `k`-th derivative of the BSpline evaluated. The default is 0.
 
     Returns
     -------
-    (vals, row, col) : (numpy.array of float, numpy.array of int, numpy.array of int)
+    (vals, row, col) : (np.ndarray[np.floating], np.ndarray[np.integer], np.ndarray[np.integer])
         Values and indices of the `k`-th derivative matrix of the BSpline
         basis functions in the columns for each value of `XI` in the rows.
 

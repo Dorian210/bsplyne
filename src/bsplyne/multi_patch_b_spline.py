@@ -62,9 +62,9 @@ class MultiPatchBSplineConnectivity:
 
     Attributes
     ----------
-    unique_nodes_inds : numpy.ndarray of int
+    unique_nodes_inds : np.ndarray[np.integer]
         The indices of the unique representation needed to create the unpacked one.
-    shape_by_patch : numpy.ndarray of int
+    shape_by_patch : np.ndarray[np.integer]
         The shape of the separated nodes by patch.
     nb_nodes : int
         The total number of unpacked nodes.
@@ -88,9 +88,9 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        unique_nodes_inds : numpy.ndarray of int
+        unique_nodes_inds : np.ndarray[np.integer]
             The indices of the unique representation needed to create the unpacked one.
-        shape_by_patch : numpy.ndarray of int
+        shape_by_patch : np.ndarray[np.integer]
             The shape of the separated nodes by patch.
         nb_unique_nodes : int
             The total number of unique nodes.
@@ -108,10 +108,10 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        nodes_couples : numpy.ndarray of int
+        nodes_couples : np.ndarray[np.integer]
             Couples of indices of unpacked nodes that are considered the same.
             Its shape should be (# of couples, 2)
-        shape_by_patch : numpy.ndarray of int
+        shape_by_patch : np.ndarray[np.integer]
             The shape of the separated nodes by patch.
 
         Returns
@@ -142,7 +142,7 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        separated_ctrlPts : list of numpy.ndarray of float
+        separated_ctrlPts : list of np.ndarray[np.floating]
             Control points of every patch to be compared in the separated
             representation. Every array is of shape :
             (``NPh``, nb elem for dim 1, ..., nb elem for dim ``npa``)
@@ -217,13 +217,13 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        unique_field : numpy.ndarray
+        unique_field : np.ndarray
             The unique representation. Its shape should be :
             (field, shape, ..., `self`.`nb_unique_nodes`)
 
         Returns
         -------
-        unpacked_field : numpy.ndarray
+        unpacked_field : np.ndarray
             The unpacked representation. Its shape is :
             (field, shape, ..., `self`.`nb_nodes`)
         """
@@ -236,7 +236,7 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        unpacked_field : numpy.ndarray
+        unpacked_field : np.ndarray
             The unpacked representation. Its shape should be :
             (field, shape, ..., `self`.`nb_nodes`)
         method: str
@@ -244,7 +244,7 @@ class MultiPatchBSplineConnectivity:
 
         Returns
         -------
-        unique_nodes : numpy.ndarray
+        unique_nodes : np.ndarray
             The unique representation. Its shape is :
             (field, shape, ..., `self`.`nb_unique_nodes`)
         """
@@ -273,13 +273,13 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        unpacked_field : numpy.ndarray
+        unpacked_field : np.ndarray
             The unpacked representation. Its shape is :
             (field, shape, ..., `self`.`nb_nodes`)
 
         Returns
         -------
-        separated_field : list of numpy.ndarray
+        separated_field : list of np.ndarray
             The separated representation. Every array is of shape :
             (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
         """
@@ -300,13 +300,13 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        separated_field : list of numpy.ndarray
+        separated_field : list of np.ndarray
             The separated representation. Every array is of shape :
             (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
 
         Returns
         -------
-        unpacked_field : numpy.ndarray
+        unpacked_field : np.ndarray
             The unpacked representation. Its shape is :
             (field, shape, ..., `self`.`nb_nodes`)
         """
@@ -334,7 +334,7 @@ class MultiPatchBSplineConnectivity:
 
         Returns
         -------
-        unique_field_indices : numpy.ndarray of int or list of numpy.ndarray of int
+        unique_field_indices : np.ndarray[np.integer] or list of np.ndarray[np.integer]
             The unique, unpacked or separated representation of a field's unique indices.
             If unique, its shape is (*`field_shape`, `self`.`nb_unique_nodes`).
             If unpacked, its shape is : (*`field_shape`, `self`.`nb_nodes`).
@@ -366,7 +366,7 @@ class MultiPatchBSplineConnectivity:
 
         Returns
         -------
-        duplicate_nodes_mask : numpy.ndarray
+        duplicate_nodes_mask : np.ndarray
             Boolean mask of shape (nb_nodes,) where True indicates a node is duplicated
             across multiple patches and False indicates it appears only once.
         """
@@ -391,7 +391,7 @@ class MultiPatchBSplineConnectivity:
             Connectivity information for the border patches.
         border_splines : list[BSpline]
             Array of B-spline patches representing the borders.
-        border_unique_to_self_unique_connectivity : numpy.ndarray of int
+        border_unique_to_self_unique_connectivity : np.ndarray[np.integer]
             Array mapping border unique nodes to original unique nodes.
 
         Raises
@@ -484,7 +484,7 @@ class MultiPatchBSplineConnectivity:
             Connectivity information for the border patches.
         border_splines : list[BSpline]
             Array of B-spline patches representing the borders.
-        border_unique_to_self_unique_connectivity : numpy.ndarray of int
+        border_unique_to_self_unique_connectivity : np.ndarray[np.integer]
             Array mapping border unique nodes to original unique nodes.
 
         Raises
@@ -649,7 +649,7 @@ class MultiPatchBSplineConnectivity:
         ----------
         splines : list[BSpline]
             Array of B-spline patches to subset.
-        patches_to_keep : numpy.array of int
+        patches_to_keep : np.ndarray[np.integer]
             Indices of patches to keep in the subset.
 
         Returns
@@ -658,7 +658,7 @@ class MultiPatchBSplineConnectivity:
             New connectivity object containing only the selected patches.
         new_splines : list[BSpline]
             Array of B-spline patches for the selected patches.
-        new_unique_to_self_unique_connectivity : numpy.ndarray of int
+        new_unique_to_self_unique_connectivity : np.ndarray[np.integer]
             Array mapping new unique nodes to original unique nodes.
         """
         new_splines = splines[patches_to_keep]

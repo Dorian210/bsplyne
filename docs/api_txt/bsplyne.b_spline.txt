@@ -1193,14 +1193,14 @@ See Also
     self,
     ctrl_pts: numpy.ndarray[numpy.floating],
     n_eval_per_elem: Union[int, Iterable[int]] = 10,
-    plotter: Union[matplotlib.axes._axes.Axes, ForwardRef('pv.Plotter'), NoneType] = None,
+    plotter: Union[matplotlib.axes._axes.Axes, pyvista.plotting.plotter.Plotter, NoneType] = None,
     ctrl_color: str = '#d95f02',
     interior_color: str = '#666666',
     elem_color: str = '#7570b3',
     border_color: str = '#1b9e77',
     language: Union[Literal['english'], Literal['français']] = 'english',
     show: bool = True
-) -> Union[matplotlib.axes._axes.Axes, ForwardRef('pv.Plotter'), NoneType]
+) -> Union[matplotlib.axes._axes.Axes, pyvista.plotting.plotter.Plotter, NoneType]
       Plot the B-spline using either Matplotlib or PyVista, depending on availability.
       
       Automatically selects the appropriate plotting backend (Matplotlib or PyVista)
@@ -1397,13 +1397,13 @@ See Also
     self,
     ctrl_pts: numpy.ndarray[numpy.floating],
     n_eval_per_elem: Union[int, Iterable[int]] = 10,
-    pv_plotter: Optional[ForwardRef('pv.Plotter')] = None,
+    pv_plotter: Optional[pyvista.plotting.plotter.Plotter] = None,
     ctrl_color: str = '#d95f02',
     interior_color: str = '#666666',
     elem_color: str = '#7570b3',
     border_color: str = '#1b9e77',
     show: bool = True
-) -> Optional[ForwardRef('pv.Plotter')]
+) -> Optional[pyvista.plotting.plotter.Plotter]
       Plot the B-spline using PyVista for 3D visualization.
       
       Creates an interactive 3D visualization of the B-spline geometry showing the control mesh,

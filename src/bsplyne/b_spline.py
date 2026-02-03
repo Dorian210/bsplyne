@@ -1,6 +1,7 @@
 import os
 from typing import Iterable, Literal, Union
 import json, pickle
+import warnings
 
 import numpy as np
 import scipy.sparse as sps
@@ -1943,6 +1944,11 @@ class BSpline:
                 show,
             )
         else:
+            if not _can_visualize_pyvista:
+                warnings.warn(
+                    "Can't use PyVista. Fallback to Matplotlib plotter. "
+                    "For better visualization, install PyVista."
+                )
             return self.plotMPL(
                 ctrl_pts,
                 n_eval_per_elem,

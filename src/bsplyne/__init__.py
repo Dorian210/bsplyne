@@ -1,5 +1,5 @@
 """
-.. include:: ../README.md
+.. include:: ../../README.md
 """
 
 from bsplyne.b_spline_basis import BSplineBasis
