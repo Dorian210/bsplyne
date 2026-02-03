@@ -28,20 +28,6 @@ pip install bsplyne[viz]
 
 > Note: choose either the core (`bsplyne`) or the visualization (`bsplyne[viz]`) installation, not both.
 
-### Using conda (conda-forge)
-
-Install the core library:
-
-```bash
-conda install -c conda-forge bsplyne
-```
-
-Optional: install PyVista to enable visualization features:
-
-```bash
-conda install -c conda-forge pyvista
-```
-
 ### From source (development mode)
 
 Clone the repository and install:
@@ -57,7 +43,7 @@ pip install -e .[viz]  # with visualization
 
 ## Dependencies
 
-Core dependencies are handled automatically by `pip` or `conda`:
+Core dependencies are handled automatically by `pip`:
 
 - numpy
 - numba
