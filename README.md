@@ -1,7 +1,7 @@
 # bsplyne
 
 <p align="center">
-  <img src="docs/logo.png" width="500" />
+  <img src="https://raw.githubusercontent.com/Dorian210/bsplyne/main/docs/logo.png" width="500" />
 </p>
 
 **bsplyne** is a Python library for working with N-dimensional B-splines, with a focus on numerical mechanics and geometry.
@@ -12,7 +12,7 @@ multi-patch B-spline structures. Visualization and export utilities (e.g. Paravi
 
 ## Installation
 
-### Using pip
+### From PyPI (recommended method)
 
 Install the core library:
 
@@ -26,7 +26,7 @@ Install the library **with recommended visualization features** (additionally in
 pip install bsplyne[viz]
 ```
 
-> Note: choose either the core (`bsplyne`) or the visualization (`bsplyne[viz]`) installation, not both.
+> Note: choose either the core (`bsplyne`) or the visualization (`bsplyne[viz]`) installation.
 
 ### From source (development mode)
 
