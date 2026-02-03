@@ -11,9 +11,8 @@ build/
 dist/
 *.egg-info/
 
-# Pytest (incomplet)
+# Pytest
 .pytest_cache/
-tests/
 
 # Virtual environments
 .venv/

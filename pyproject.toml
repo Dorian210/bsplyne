@@ -44,7 +44,8 @@ viz = [
 ]
 dev = [
     "build",
-    "twine"
+    "twine",
+    "pytest"
 ]
 docs = [
     "wkhtmltopdf",
