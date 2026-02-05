@@ -35,6 +35,9 @@ html:
 	        sed -i "s|$(LOGO)|$$rel_path|g" "$$file"; \
 	    fi; \
 	done
+	sed -i \
+	  's|<img src="[^"]*$(LOGO)"|<img src="$(LOGO)"|g' \
+	  $(DOC_DIR)/$(notdir $(abspath $(PACKAGE))).html
 
 # Generate a PDF documentation from HTML
 pdf:
@@ -57,6 +60,9 @@ pdf:
 txt:
 	@echo "Génération de l'API en format texte..."
 	@python3 make_txt.py $(notdir $(abspath $(PACKAGE))) -p $(dir $(abspath $(PACKAGE))) -o $(OUTPUT_TXT)
+
+tmp:
+	@echo $(notdir $(abspath $(PACKAGE)))
 
 # Nettoyage des fichiers générés (excluant Makefile, logo, script d'extraction)
 clean:
