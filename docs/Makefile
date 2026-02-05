@@ -61,9 +61,6 @@ txt:
 	@echo "Génération de l'API en format texte..."
 	@python3 make_txt.py $(notdir $(abspath $(PACKAGE))) -p $(dir $(abspath $(PACKAGE))) -o $(OUTPUT_TXT)
 
-tmp:
-	@echo $(notdir $(abspath $(PACKAGE)))
-
 # Nettoyage des fichiers générés (excluant Makefile, logo, script d'extraction)
 clean:
 	@echo "Nettoyage des dossiers de documentation..."
