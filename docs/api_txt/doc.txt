@@ -23,9 +23,9 @@ Supports knot insertion, order elevation, and visualization through Paraview and
 Attributes
 ----------
 NPa : int
-    Dimension of the isoparametric space.
+    Dimension of the parametric space.
 bases : np.ndarray[BSplineBasis]
-    Array containing `BSplineBasis` instances for each isoparametric dimension.
+    Array containing `BSplineBasis` instances for each parametric dimension.
 
 Notes
 -----
@@ -226,7 +226,7 @@ p : int
     Degree of the polynomials composing the basis.
 knot : np.ndarray[np.floating]
     Knot vector defining the B-spline basis. Contains non-decreasing sequence
-    of isoparametric coordinates.
+    of parametric coordinates.
 m : int
     Last index of the knot vector (size - 1).
 n : int
@@ -237,7 +237,7 @@ span : tuple[float, float]
 
 Notes
 -----
-The basis functions are defined over the isoparametric space specified by the knot vector.
+The basis functions are defined over the parametric space specified by the knot vector.
 Basis function evaluation and manipulation methods use efficient algorithms based on
 Cox-de Boor recursion formulas.
 

@@ -12,9 +12,9 @@ Supports knot insertion, order elevation, and visualization through Paraview and
 Attributes
 ----------
 NPa : int
-    Dimension of the isoparametric space.
+    Dimension of the parametric space.
 bases : np.ndarray[BSplineBasis]
-    Array containing `BSplineBasis` instances for each isoparametric dimension.
+    Array containing `BSplineBasis` instances for each parametric dimension.
 
 Notes
 -----
@@ -36,13 +36,13 @@ See Also
 )
       Initialize a `BSpline` instance with specified degrees and knot vectors.
       
-      Creates a `BSpline` object by generating basis functions for each isoparametric dimension
+      Creates a `BSpline` object by generating basis functions for each parametric dimension
       using the provided polynomial degrees and knot vectors.
       
       Parameters
       ----------
       degrees : Iterable[int]
-          Collection of polynomial degrees for each isoparametric dimension.
+          Collection of polynomial degrees for each parametric dimension.
           The length determines the dimensionality of the parametric space (`NPa`).
           For example:
           - [p] for a curve
@@ -51,7 +51,7 @@ See Also
           - ...
       
       knots : Iterable[np.ndarray[np.floating]]
-          Collection of knot vectors for each isoparametric dimension.
+          Collection of knot vectors for each parametric dimension.
           Each knot vector must be a numpy array of `floats`.
           The number of knot vectors must match the number of degrees.
           For a degree `p`, the knot vector must have size `m + 1` where `m>=p`.
@@ -110,14 +110,14 @@ See Also
       >>> spline = BSpline.from_bases([basis1, basis2])
 
   >>> getDegrees(self) -> numpy.ndarray[numpy.integer]
-      Returns the polynomial degree of each basis function in the isoparametric space.
+      Returns the polynomial degree of each basis function in the parametric space.
       
       Returns
       -------
       degrees : np.ndarray[np.integer]
           Array containing the polynomial degrees of the B-spline basis functions.
-          The array has length `NPa` (dimension of isoparametric space), where each element
-          represents the degree of the corresponding isoparametric dimension.
+          The array has length `NPa` (dimension of parametric space), where each element
+          represents the degree of the corresponding parametric dimension.
       
       Notes
       -----
@@ -136,18 +136,18 @@ See Also
       array([2, 2])
 
   >>> getKnots(self) -> list[numpy.ndarray[numpy.floating]]
-      Returns the knot vector of each basis function in the isoparametric space.
+      Returns the knot vector of each basis function in the parametric space.
       
       This method collects all knot vectors from each `BSplineBasis` instance stored
-      in the `bases` array. The knot vectors define the isoparametric space partitioning
+      in the `bases` array. The knot vectors define the parametric space partitioning
       and the regularity properties of the B-spline.
       
       Returns
       -------
       knots : list[np.ndarray[np.floating]]
           List containing the knot vectors of the B-spline basis functions.
-          The list has length `NPa` (dimension of isoparametric space), where each element
-          is a `numpy.ndarray` containing the knots for the corresponding isoparametric dimension.
+          The list has length `NPa` (dimension of parametric space), where each element
+          is a `numpy.ndarray` containing the knots for the corresponding parametric dimension.
       
       Notes
       -----
@@ -170,7 +170,7 @@ See Also
   >>> getCtrlShape(self) -> tuple[int]
       Get the shape of the control grid (number of control points per dimension).
       
-      This method returns a tuple giving, for each isoparametric direction,
+      This method returns a tuple giving, for each parametric direction,
       the number of control points associated with the corresponding B-spline basis.
       In each dimension, this number is equal to `n + 1`, where `n` is the highest
       basis function index.
@@ -201,7 +201,7 @@ See Also
       Compute the total number of basis functions in the B-spline.
       
       This method calculates the total number of basis functions by multiplying
-      the number of basis functions in each isoparametric dimension (`n + 1` for each dimension).
+      the number of basis functions in each parametric dimension (`n + 1` for each dimension).
       
       Returns
       -------
@@ -227,7 +227,7 @@ See Also
       16
 
   >>> getSpans(self) -> list[tuple[float, float]]
-      Returns the span of each basis function in the isoparametric space.
+      Returns the span of each basis function in the parametric space.
       
       This method collects the spans (intervals of definition) from each `BSplineBasis`
       instance stored in the `bases` array.
@@ -236,9 +236,9 @@ See Also
       -------
       spans : list[tuple[float, float]]
           List containing the spans of the B-spline basis functions.
-          The list has length `NPa` (dimension of isoparametric space), where each element
+          The list has length `NPa` (dimension of parametric space), where each element
           is a tuple (`a`, `b`) containing the lower and upper bounds of the span
-          for the corresponding isoparametric dimension.
+          for the corresponding parametric dimension.
       
       Notes
       -----
@@ -262,15 +262,15 @@ See Also
     self,
     n_eval_per_elem: Union[int, Iterable[int]] = 10
 ) -> tuple[numpy.ndarray[numpy.floating], ...]
-      Generate sets of evaluation points over the span of each basis in the isoparametric space.
+      Generate sets of evaluation points over the span of each basis in the parametric space.
       
-      This method creates evenly spaced points for each isoparametric dimension by calling
+      This method creates evenly spaced points for each parametric dimension by calling
       `linspace` on each `BSplineBasis` instance stored in the `bases` array.
       
       Parameters
       ----------
       n_eval_per_elem : Union[int, Iterable[int]], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
           If an `Iterable` is provided, each value corresponds to a different dimension.
           By default, 10.
@@ -278,8 +278,8 @@ See Also
       Returns
       -------
       XI : tuple[np.ndarray[np.floating], ...]
-          Tuple containing arrays of evaluation points for each isoparametric dimension.
-          The tuple has length `NPa` (dimension of isoparametric space).
+          Tuple containing arrays of evaluation points for each parametric dimension.
+          The tuple has length `NPa` (dimension of parametric space).
       
       Notes
       -----
@@ -309,19 +309,19 @@ See Also
       Generate sets of evaluation points and their integration weights over each basis span.
       
       This method creates evenly spaced points and their corresponding integration weights
-      for each isoparametric dimension by calling `linspace_for_integration` on each
+      for each parametric dimension by calling `linspace_for_integration` on each
       `BSplineBasis` instance stored in the `bases` array.
       
       Parameters
       ----------
       n_eval_per_elem : Union[int, Iterable[int]], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
           If an `Iterable` is provided, each value corresponds to a different dimension.
           By default, 10.
       
       bounding_box : Union[Iterable[tuple[float, float]], None], optional
-          Lower and upper bounds for each isoparametric dimension.
+          Lower and upper bounds for each parametric dimension.
           If `None`, uses the span of each basis.
           Format: [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), ...].
           By default, None.
@@ -329,12 +329,12 @@ See Also
       Returns
       -------
       XI : tuple[np.ndarray[np.floating], ...]
-          Tuple containing arrays of evaluation points for each isoparametric dimension.
-          The tuple has length `NPa` (dimension of isoparametric space).
+          Tuple containing arrays of evaluation points for each parametric dimension.
+          The tuple has length `NPa` (dimension of parametric space).
       
       dXI : tuple[np.ndarray[np.floating], ...]
-          Tuple containing arrays of integration weights for each isoparametric dimension.
-          The tuple has length `NPa` (dimension of isoparametric space).
+          Tuple containing arrays of integration weights for each parametric dimension.
+          The tuple has length `NPa` (dimension of parametric space).
       
       Notes
       -----
@@ -365,13 +365,13 @@ See Also
       Generate sets of evaluation points and their Gauss-Legendre integration weights over each basis span.
       
       This method creates Gauss-Legendre quadrature points and their corresponding integration weights
-      for each isoparametric dimension by calling `gauss_legendre_for_integration` on each
+      for each parametric dimension by calling `gauss_legendre_for_integration` on each
       `BSplineBasis` instance stored in the `bases` array.
       
       Parameters
       ----------
       n_eval_per_elem : Union[int, Iterable[int], None], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
           If an `Iterable` is provided, each value corresponds to a different dimension.
           If `None`, uses `p//2 + 1` points per element where `p` is the degree of each basis.
@@ -379,7 +379,7 @@ See Also
           By default, None.
       
       bounding_box : Union[Iterable[tuple[float, float]], None], optional
-          Lower and upper bounds for each isoparametric dimension.
+          Lower and upper bounds for each parametric dimension.
           If `None`, uses the span of each basis.
           Format: [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), ...].
           By default, None.
@@ -387,12 +387,12 @@ See Also
       Returns
       -------
       XI : tuple[np.ndarray[np.floating], ...]
-          Tuple containing arrays of Gauss-Legendre points for each isoparametric dimension.
-          The tuple has length `NPa` (dimension of isoparametric space).
+          Tuple containing arrays of Gauss-Legendre points for each parametric dimension.
+          The tuple has length `NPa` (dimension of parametric space).
       
       dXI : tuple[np.ndarray[np.floating], ...]
-          Tuple containing arrays of Gauss-Legendre weights for each isoparametric dimension.
-          The tuple has length `NPa` (dimension of isoparametric space).
+          Tuple containing arrays of Gauss-Legendre weights for each parametric dimension.
+          The tuple has length `NPa` (dimension of parametric space).
       
       Notes
       -----
@@ -417,7 +417,7 @@ See Also
       array([0.25, 0.25, 0.25, 0.25])
 
   >>> normalize_knots(self)
-      Maps all knot vectors to the interval [0, 1] in each isoparametric dimension.
+      Maps all knot vectors to the interval [0, 1] in each parametric dimension.
       
       This method normalizes the knot vectors of each `BSplineBasis` instance stored
       in the `bases` array by applying an affine transformation that maps the span
@@ -427,7 +427,7 @@ See Also
       -----
       - The transformation preserves the relative spacing between knots
       - The transformation preserves the multiplicity of knots
-      - The transformation is applied independently to each isoparametric dimension
+      - The transformation is applied independently to each parametric dimension
       - This operation modifies the knot vectors in place
       
       Examples
@@ -449,7 +449,7 @@ See Also
     XI: Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], ...]],
     k: Union[int, Iterable[int]] = 0
 ) -> Union[scipy.sparse._matrix.spmatrix, numpy.ndarray[scipy.sparse._matrix.spmatrix]]
-      Compute the `k`-th derivative of the B-spline basis at given points in the isoparametric space.
+      Compute the `k`-th derivative of the B-spline basis at given points in the parametric space.
       
       This method evaluates the basis functions or their derivatives at specified points, returning
       a matrix that can be used to evaluate the B-spline through a dot product with the control points.
@@ -457,7 +457,7 @@ See Also
       Parameters
       ----------
       XI : Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]]
-          Points in the isoparametric space where to evaluate the basis functions.
+          Points in the parametric space where to evaluate the basis functions.
           Two input formats are accepted:
           1. `numpy.ndarray`: Array of coordinates with shape (`NPa`, n_points).
           Each column represents one evaluation point [`xi`, `eta`, ...].
@@ -541,7 +541,7 @@ See Also
     XI: Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], ...]],
     k: Union[int, Iterable[int]] = 0
 ) -> numpy.ndarray[numpy.floating]
-      Evaluate the `k`-th derivative of the B-spline at given points in the isoparametric space.
+      Evaluate the `k`-th derivative of the B-spline at given points in the parametric space.
       
       This method evaluates the B-spline or its derivatives at specified points by computing
       the basis functions and performing a dot product with the control points.
@@ -552,11 +552,11 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
-          - ni is the number of control points in the i-th isoparametric dimension,
-          i.e. the number of basis functions on this isoparametric axis
+          - ni is the number of control points in the i-th parametric dimension,
+          i.e. the number of basis functions on this parametric axis
       
       XI : Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]]
-          Points in the isoparametric space where to evaluate the B-spline.
+          Points in the parametric space where to evaluate the B-spline.
           Two input formats are accepted:
           1. `numpy.ndarray`: Array of coordinates with shape (`NPa`, n_points).
           Each column represents one evaluation point [`xi`, `eta`, ...].
@@ -590,7 +590,7 @@ See Also
       with control points
       - When using tuple input format, points are evaluated at all combinations of coordinates
       - When using array input format, each column represents one evaluation point
-      - The gradient (`k=1`) returns derivatives along each isoparametric axis
+      - The gradient (`k=1`) returns derivatives along each parametric axis
       - Mixed derivatives can be computed using a list of derivative orders
       
       Examples
@@ -628,7 +628,7 @@ See Also
 ) -> numpy.ndarray[numpy.floating]
       Add knots to the B-spline while preserving its geometry.
       
-      This method performs knot insertion by adding new knots to each isoparametric dimension
+      This method performs knot insertion by adding new knots to each parametric dimension
       and computing the new control points to maintain the exact same geometry. The method
       modifies the `BSpline` object by updating its basis functions with the new knots.
       
@@ -638,12 +638,12 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
-          - ni is the number of control points in the i-th isoparametric dimension
+          - ni is the number of control points in the i-th parametric dimension
           If None is passed, the knot insertion is performed on the basis functions
           but not on the control points.
       
       knots_to_add : Iterable[Union[np.ndarray[np.floating], int]]
-          Refinement specification for each isoparametric dimension.
+          Refinement specification for each parametric dimension.
           For each dimension, two formats are accepted:
           1. `numpy.ndarray`: Array of knots to insert. These knots must lie within
           the span of the existing knot vector.
@@ -654,7 +654,7 @@ See Also
       new_ctrl_pts : np.ndarray[np.floating]
           New control points after knot insertion.
           Shape: (`NPh`, m1, m2, ...) where mi ≥ ni is the new number of
-          control points in the i-th isoparametric dimension.
+          control points in the i-th parametric dimension.
       
       Notes
       -----
@@ -698,7 +698,7 @@ See Also
       Elevate the polynomial degree of the B-spline while preserving its geometry.
       
       This method performs order elevation by increasing the polynomial degree of each
-      isoparametric dimension and computing the new control points to maintain the exact
+      parametric dimension and computing the new control points to maintain the exact
       same geometry. The method modifies the `BSpline` object by updating its basis
       functions with the new degrees.
       
@@ -708,12 +708,12 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
-          - ni is the number of control points in the i-th isoparametric dimension
+          - ni is the number of control points in the i-th parametric dimension
           If None is passed, the order elevation is performed on the basis functions
           but not on the control points.
       
       t : Iterable[int]
-          Degree elevation for each isoparametric dimension.
+          Degree elevation for each parametric dimension.
           For each dimension i, the new degree will be `p_i + t_i` where `p_i`
           is the current degree.
       
@@ -722,7 +722,7 @@ See Also
       new_ctrl_pts : np.ndarray[np.floating]
           New control points after order elevation.
           Shape: (`NPh`, m1, m2, ...) where mi ≥ ni is the new number of
-          control points in the i-th isoparametric dimension.
+          control points in the i-th parametric dimension.
       
       Notes
       -----
@@ -753,10 +753,10 @@ See Also
     self,
     return_weights: bool = False
 ) -> Union[list[numpy.ndarray[numpy.floating]], tuple[list[numpy.ndarray[numpy.floating]], list[numpy.ndarray[numpy.floating]]]]
-      Compute the Greville abscissa and optionally their weights for each isoparametric dimension.
+      Compute the Greville abscissa and optionally their weights for each parametric dimension.
       
       The Greville abscissa can be interpreted as the "position" of the control points in the
-      isoparametric space. They are often used as interpolation points for B-splines.
+      parametric space. They are often used as interpolation points for B-splines.
       
       Parameters
       ----------
@@ -767,13 +767,13 @@ See Also
       Returns
       -------
       greville : list[np.ndarray[np.floating]]
-          List containing the Greville abscissa for each isoparametric dimension.
+          List containing the Greville abscissa for each parametric dimension.
           The list has length `NPa`, where each element is an array of size `n + 1`,
           `n` being the last index of the basis functions in that dimension.
       
       weights : list[np.ndarray[np.floating]], optional
           Only returned if `return_weights` is `True`.
-          List containing the weights for each isoparametric dimension.
+          List containing the weights for each parametric dimension.
           The list has length `NPa`, where each element is an array containing
           the span length of each basis function.
       
@@ -825,11 +825,11 @@ See Also
           Array of control points of the B-spline, with shape
           (`NPh`, number of elements for dim 1, ..., number of elements for dim `NPa`),
           where `NPh` is the physical space dimension and `NPa` is the dimension of the
-          isoparametric space.
+          parametric space.
       n_step : int, optional
           Number of time steps to plot. By default, 1.
       n_eval_per_elem : Union[int, Iterable[int]], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
           - If an `Iterable` is provided, each value corresponds to a different dimension.
@@ -861,7 +861,7 @@ See Also
       
       Notes
       -----
-      - The control mesh is constructed by connecting control points along each isoparametric direction.
+      - The control mesh is constructed by connecting control points along each parametric direction.
       - Fields can be provided either as functions evaluated at the Greville abscissae, or as arrays defined on the
       control points or on a regular parametric grid (in which case they are interpolated at the Greville abscissae).
       - The first axis of the field array or function output corresponds to the time step, even if there is only one.
@@ -889,7 +889,7 @@ See Also
       Create meshes representing the boundaries of every element in the B-spline for visualization.
       
       This method generates a list of `io.Mesh` objects containing the geometry and optional fields
-      needed to plot the limits (borders) of all elements from the isoparametric space of the B-spline.
+      needed to plot the limits (borders) of all elements from the parametric space of the B-spline.
       Supports time-dependent fields and arbitrary dimension.
       
       Parameters
@@ -898,9 +898,9 @@ See Also
           Array of control points of the B-spline, with shape
           (`NPh`, number of elements for dim 1, ..., number of elements for dim `NPa`),
           where `NPh` is the physical space dimension and `NPa` is the dimension of the
-          isoparametric space.
+          parametric space.
       n_eval_per_elem : Union[int, Iterable[int]], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
           - If an `Iterable` is provided, each value corresponds to a different dimension.
@@ -933,7 +933,7 @@ See Also
       Notes
       -----
       - The element boundary mesh is constructed by connecting points along the unique knot values
-      in each isoparametric direction, outlining the limits of each element.
+      in each parametric direction, outlining the limits of each element.
       - Fields can be provided either as callable functions, as arrays defined on the control points,
       or as arrays already defined on a regular evaluation grid.
       - When fields are defined on a grid, they are interpolated in the physical space using
@@ -971,9 +971,9 @@ See Also
           Array of control points of the B-spline, with shape
           (`NPh`, number of points for dim 1, ..., number of points for dim `NPa`),
           where `NPh` is the physical space dimension and `NPa` is the dimension of
-          the isoparametric space.
+          the parametric space.
       n_eval_per_elem : Union[int, Iterable[int]], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
           - If an `Iterable` is provided, each value corresponds to a different dimension.
@@ -1002,7 +1002,7 @@ See Also
       Notes
       -----
       - The interior mesh is constructed by evaluating the B-spline at a regular grid of points
-      in the isoparametric space, with connectivity corresponding to lines (1D), quads (2D), or
+      in the parametric space, with connectivity corresponding to lines (1D), quads (2D), or
       hexahedra (3D).
       - Fields can be provided either as arrays (on control points or on the discretization grid) or as functions.
       - Arrays given on control points are automatically interpolated using the B-spline basis functions.
@@ -1057,7 +1057,7 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
-          - ni is the number of control points in the i-th isoparametric dimension
+          - ni is the number of control points in the i-th parametric dimension
       
       path : str
           Directory path where the PV files will be saved
@@ -1069,7 +1069,7 @@ See Also
           Number of time steps to save. By default, 1.
       
       n_eval_per_elem : Union[int, Iterable[int]], optional
-          Number of evaluation points per element for each isoparametric dimension.
+          Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
           - If an `Iterable` is provided, each value corresponds to a different dimension.
@@ -1089,7 +1089,7 @@ See Also
           2. A numpy array with shape (`n_step`, `field_size`, `*grid_shape`) where:
           - `n_step`: Number of time steps
           - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
-          - `*grid_shape`: Shape of the evaluation grid (number of points along each isoparametric axis)
+          - `*grid_shape`: Shape of the evaluation grid (number of points along each parametric axis)
       
           3. A function that computes field values (`np.ndarray[np.floating]`) at given
           points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
@@ -1213,7 +1213,7 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (NPh, n1, n2, ...) where:
           - NPh is the dimension of the physical space (2 or 3)
-          - ni is the number of control points in the i-th isoparametric dimension
+          - ni is the number of control points in the i-th parametric dimension
       n_eval_per_elem : Union[int, Iterable[int]], optional
           Number of evaluation points per element for visualizing the B-spline.
           Can be specified as:
@@ -1299,7 +1299,7 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (NPh, n1, n2, ...) where:
           - NPh is the dimension of the physical space (2 or 3)
-          - ni is the number of control points in the i-th isoparametric dimension
+          - ni is the number of control points in the i-th parametric dimension
       
       n_eval_per_elem : Union[int, Iterable[int]], optional
           Number of evaluation points per element for visualizing the B-spline.
@@ -1416,7 +1416,7 @@ See Also
           Control points defining the B-spline geometry.
           Shape: (NPh, n1, n2, ...) where:
           - NPh is the dimension of the physical space (2 or 3)
-          - ni is the number of control points in the i-th isoparametric dimension
+          - ni is the number of control points in the i-th parametric dimension
           If NPh=2, control points are automatically converted to 3D for plotting.
       n_eval_per_elem : Union[int, Iterable[int]], optional
           Number of evaluation points per element for visualizing the B-spline.

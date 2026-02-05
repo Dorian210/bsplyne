@@ -22,7 +22,7 @@ class BSplineBasis:
         Degree of the polynomials composing the basis.
     knot : np.ndarray[np.floating]
         Knot vector defining the B-spline basis. Contains non-decreasing sequence
-        of isoparametric coordinates.
+        of parametric coordinates.
     m : int
         Last index of the knot vector (size - 1).
     n : int
@@ -33,7 +33,7 @@ class BSplineBasis:
 
     Notes
     -----
-    The basis functions are defined over the isoparametric space specified by the knot vector.
+    The basis functions are defined over the parametric space specified by the knot vector.
     Basis function evaluation and manipulation methods use efficient algorithms based on
     Cox-de Boor recursion formulas.
 
@@ -73,7 +73,7 @@ class BSplineBasis:
         - Must be non-decreasing
         - For non closed B-spline curves, first and last knots must have multiplicity `p + 1`
 
-        The basis functions are defined over the isoparametric space specified by
+        The basis functions are defined over the parametric space specified by
         the knot vector. The span of the basis is [`knot[p]`, `knot[m - p]`], where
         `m` is the last index of the knot vector.
 
@@ -104,12 +104,12 @@ class BSplineBasis:
         Returns
         -------
         xi : np.ndarray[np.floating]
-            Array of evenly spaced points in isoparametric coordinates over the basis span.
+            Array of evenly spaced points in parametric coordinates over the basis span.
 
         Notes
         -----
         The method:
-        1. Identifies unique knot spans (elements) in the isoparametric space
+        1. Identifies unique knot spans (elements) in the parametric space
         2. Distributes points evenly within each element
         3. Combines points from all elements into a single array
 
@@ -141,7 +141,7 @@ class BSplineBasis:
     ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
         """
         Generate points and weights for numerical integration over knot spans in the
-        isoparametric space. Points are evenly distributed within each element (knot span),
+        parametric space. Points are evenly distributed within each element (knot span),
         though spacing may vary between different elements.
 
         Parameters
@@ -155,7 +155,7 @@ class BSplineBasis:
         Returns
         -------
         xi : np.ndarray[np.floating]
-            Array of integration points in isoparametric coordinates, evenly spaced
+            Array of integration points in parametric coordinates, evenly spaced
             within each element.
         dxi : np.ndarray[np.floating]
             Array of corresponding integration weights, which may vary between elements
@@ -163,7 +163,7 @@ class BSplineBasis:
         Notes
         -----
         The method generates integration points by:
-        1. Identifying unique knot spans (elements) in the isoparametric space
+        1. Identifying unique knot spans (elements) in the parametric space
         2. Distributing points evenly within each element
         3. Computing appropriate weights for each point based on the element size
 
@@ -251,14 +251,14 @@ class BSplineBasis:
         Returns
         -------
         xi : np.ndarray[np.floating]
-            Array of Gauss-Legendre quadrature points in isoparametric coordinates.
+            Array of Gauss-Legendre quadrature points in parametric coordinates.
         dxi : np.ndarray[np.floating]
             Array of corresponding integration weights.
 
         Notes
         -----
         The method generates integration points and weights by:
-        1. Identifying unique knot spans (elements) in the isoparametric space
+        1. Identifying unique knot spans (elements) in the parametric space
         2. Computing Gauss-Legendre points and weights for each element
         3. Transforming points and weights to account for element size
 
@@ -328,7 +328,7 @@ class BSplineBasis:
         Parameters
         ----------
         XI : np.ndarray[np.floating]
-            Points in the isoparametric space at which to evaluate the basis functions.
+            Points in the parametric space at which to evaluate the basis functions.
         k : int, optional
             Order of the derivative to compute. By default, 0.
 
@@ -445,7 +445,7 @@ class BSplineBasis:
         - Uses adaptive sampling with points only in regions where basis functions are non-zero
         - Plots each basis function in a different color with LaTeX-formatted labels
         - Legend is automatically hidden if there are more than 10 basis functions
-        - The x-axis represents the isoparametric coordinate ξ
+        - The x-axis represents the parametric coordinate ξ
 
         Examples
         --------

@@ -397,7 +397,7 @@ class MultiPatchBSplineConnectivity:
         Raises
         ------
         AssertionError
-            If isoparametric space dimension is less than 2.
+            If parametric space dimension is less than 2.
         """
         if self.npa <= 1:
             raise AssertionError(
@@ -900,7 +900,7 @@ class MultiPatchBSplineConnectivity:
         n_step : int, optional
             Number of time steps to generate. By default, 1.
         n_eval_per_elem : Union[int, Iterable[int]], optional
-            Number of evaluation points per element for each isoparametric dimension.
+            Number of evaluation points per element for each parametric dimension.
             If an `int` is provided, the same number is used for all dimensions.
             If an `Iterable` is provided, each value corresponds to a different dimension.
             By default, 10.
@@ -951,7 +951,6 @@ class MultiPatchBSplineConnectivity:
 
         Notes
         -----
-        - The isoparametric space refers to the parametric space of the B-splines.
         - Fields can be visualized as scalars or vectors.
         - Supports time-dependent visualization through `n_step`.
         - Fields in `unique_fields` must be arrays; to use callables, use `separated_fields`.
@@ -1095,7 +1094,7 @@ class MultiPatchBSplineConnectivity:
         n_step : int, optional
             Number of time steps to save. By default, 1.
         n_eval_per_elem : Union[int, Iterable[int]], optional
-            Number of evaluation points per element for each isoparametric dimension.
+            Number of evaluation points per element for each parametric dimension.
             If an `int` is provided, the same number is used for all dimensions.
             If an `Iterable` is provided, each value corresponds to a different dimension.
             By default, 10.
@@ -1118,7 +1117,7 @@ class MultiPatchBSplineConnectivity:
             2. A numpy array with shape (`n_step`, `field_size`, `*grid_shape`) where:
             - `n_step`: Number of time steps
             - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
-            - `*grid_shape`: Shape of the evaluation grid (number of points along each isoparametric axis)
+            - `*grid_shape`: Shape of the evaluation grid (number of points along each parametric axis)
 
             3. A function that computes field values (`np.ndarray[np.floating]`) at given
             points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
