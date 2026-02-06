@@ -1,5 +1,5 @@
 ================================================================
-DOCUMENTATION COMPLÈTE DE L'API : BSPLYNE
+FULL API DOCUMENTATION: BSPLYNE
 ================================================================
 
 
@@ -11,9 +11,9 @@ MODULE: bsplyne
 ################################################################
 MODULE: bsplyne.b_spline
 ========================
-Documentation du module bsplyne.b_spline
+Documentation for module bsplyne.b_spline
 
-CLASSE: BSpline
+CLASS: BSpline
 ---------------
 BSpline class for representing and manipulating B-spline curves, surfaces and volumes.
 
@@ -209,9 +209,9 @@ See Also
 ################################################################
 MODULE: bsplyne.b_spline_basis
 ==============================
-Documentation du module bsplyne.b_spline_basis
+Documentation for module bsplyne.b_spline_basis
 
-CLASSE: BSplineBasis
+CLASS: BSplineBasis
 --------------------
 BSpline basis in 1D.
 
@@ -293,14 +293,14 @@ See Also
 ) -> Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]]
 
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
 ################################################################
 MODULE: bsplyne.geometries_in_3D
 ================================
-Documentation du module bsplyne.geometries_in_3D
+Documentation for module bsplyne.geometries_in_3D
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> scale_rotate_translate(pts, scale_vector, axis, angle, translation_vector)
 
@@ -337,9 +337,9 @@ FONCTIONS GLOBALES:
 ################################################################
 MODULE: bsplyne.multi_patch_b_spline
 ====================================
-Documentation du module bsplyne.multi_patch_b_spline
+Documentation for module bsplyne.multi_patch_b_spline
 
-CLASSE: MultiPatchBSplineConnectivity
+CLASS: MultiPatchBSplineConnectivity
 -------------------------------------
 Contains all the methods to link multiple B-spline patches.
 It uses 3 representations of the data :
@@ -465,7 +465,7 @@ npa : int
 )
 
 
-CLASSE: CouplesBSplineBorder
+CLASS: CouplesBSplineBorder
 ----------------------------
 
 
@@ -515,14 +515,14 @@ CLASSE: CouplesBSplineBorder
 )
 
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
 ################################################################
 MODULE: bsplyne.my_wide_product
 ===============================
-Documentation du module bsplyne.my_wide_product
+Documentation for module bsplyne.my_wide_product
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> my_wide_product(
     A: scipy.sparse._matrix.spmatrix,
@@ -532,9 +532,9 @@ FONCTIONS GLOBALES:
 ################################################################
 MODULE: bsplyne.parallel_utils
 ==============================
-Documentation du module bsplyne.parallel_utils
+Documentation for module bsplyne.parallel_utils
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> parallel_blocks_inner(
     funcs: Iterable[Callable],
@@ -560,9 +560,9 @@ FONCTIONS GLOBALES:
 ################################################################
 MODULE: bsplyne.save_utils
 ==========================
-Documentation du module bsplyne.save_utils
+Documentation for module bsplyne.save_utils
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> writePVD(fileName: str, groups: dict[str, dict])
 

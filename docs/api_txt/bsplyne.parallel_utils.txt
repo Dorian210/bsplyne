@@ -1,8 +1,8 @@
 MODULE: bsplyne.parallel_utils
 ==============================
-Documentation du module bsplyne.parallel_utils
+Documentation for module bsplyne.parallel_utils
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> parallel_blocks_inner(
     funcs: Iterable[Callable],

@@ -1,8 +1,8 @@
 MODULE: bsplyne.save_utils
 ==========================
-Documentation du module bsplyne.save_utils
+Documentation for module bsplyne.save_utils
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> writePVD(fileName: str, groups: dict[str, dict])
       Writes a Paraview Data (PVD) file that references multiple VTK files.

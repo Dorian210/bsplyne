@@ -1,8 +1,8 @@
 MODULE: bsplyne.geometries_in_3D
 ================================
-Documentation du module bsplyne.geometries_in_3D
+Documentation for module bsplyne.geometries_in_3D
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> scale_rotate_translate(pts, scale_vector, axis, angle, translation_vector)
       Applies a scale, rotation and translation to a set of points.

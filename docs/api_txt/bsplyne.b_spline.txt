@@ -1,8 +1,8 @@
 MODULE: bsplyne.b_spline
 ========================
-Documentation du module bsplyne.b_spline
+Documentation for module bsplyne.b_spline
 
-CLASSE: BSpline
+CLASS: BSpline
 ---------------
 BSpline class for representing and manipulating B-spline curves, surfaces and volumes.
 

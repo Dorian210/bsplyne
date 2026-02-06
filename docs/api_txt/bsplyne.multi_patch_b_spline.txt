@@ -1,8 +1,8 @@
 MODULE: bsplyne.multi_patch_b_spline
 ====================================
-Documentation du module bsplyne.multi_patch_b_spline
+Documentation for module bsplyne.multi_patch_b_spline
 
-CLASSE: MultiPatchBSplineConnectivity
+CLASS: MultiPatchBSplineConnectivity
 -------------------------------------
 Contains all the methods to link multiple B-spline patches.
 It uses 3 representations of the data :
@@ -493,7 +493,7 @@ npa : int
       >>> connectivity.save_paraview(splines, separated_ctrl_pts, "./output", "multipatch", separated_fields=fields)
 
 
-CLASSE: CouplesBSplineBorder
+CLASS: CouplesBSplineBorder
 ----------------------------
 
 
@@ -543,5 +543,5 @@ CLASSE: CouplesBSplineBorder
 )
 
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~

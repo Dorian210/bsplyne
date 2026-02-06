@@ -1,8 +1,8 @@
 MODULE: bsplyne.b_spline_basis
 ==============================
-Documentation du module bsplyne.b_spline_basis
+Documentation for module bsplyne.b_spline_basis
 
-CLASSE: BSplineBasis
+CLASS: BSplineBasis
 --------------------
 BSpline basis in 1D.
 
@@ -402,5 +402,5 @@ See Also
       array([0.5, 1. , 1. , 0.5])
 
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~

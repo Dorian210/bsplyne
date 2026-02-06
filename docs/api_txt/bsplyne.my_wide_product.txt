@@ -1,8 +1,8 @@
 MODULE: bsplyne.my_wide_product
 ===============================
-Documentation du module bsplyne.my_wide_product
+Documentation for module bsplyne.my_wide_product
 
-FONCTIONS GLOBALES:
+GLOBAL FUNCTIONS:
 ~~~~~~~~~~~~~~~~~~
   >>> my_wide_product(
     A: scipy.sparse._matrix.spmatrix,
