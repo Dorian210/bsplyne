@@ -81,3 +81,5 @@ dX_dxi = dN_dxi @ P
 dx_dxi, dy_dxi = dX_dxi.T
 integral = np.sum(np.sqrt(dx_dxi**2 + dy_dxi**2) * dxi_int)
 print(f"Circle circumference : {2*np.pi*R:.3f}\nB-spline length : {integral:.3f}")
+
+# %%
