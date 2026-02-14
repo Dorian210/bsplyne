@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bsplyne"
-version = "1.0.4"
+version = "1.0.5"
 description = "N-dimensional B-spline library for numerical mechanics and geometry"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -21,7 +21,8 @@ dependencies = [
     "scipy>=1.8",
     "matplotlib>=3.5",
     "meshio>=5.0",
-    "tqdm>=4.60"
+    "tqdm>=4.60",
+    "cloudpickle>=2.2"
 ]
 
 classifiers = [

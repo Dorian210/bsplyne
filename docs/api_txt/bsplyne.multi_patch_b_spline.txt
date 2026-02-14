@@ -102,7 +102,10 @@ npa : int
           The unpacked representation. Its shape should be :
           (field, shape, ..., `self`.`nb_nodes`)
       method: str
-          The method used to group values that could be different
+          The method used to group values that could be different.
+          Can be "last", "first" or "mean". If "last", the last value is kept.
+          If "first", the first value is kept. If "mean", the mean value is
+          taken. Default is "mean".
       
       Returns
       -------

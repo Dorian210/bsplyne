@@ -1,4 +1,5 @@
 import multiprocessing as mp
+import cloudpickle
 from multiprocessing import shared_memory
 import threading
 import queue
@@ -8,6 +9,8 @@ import numpy as np
 import tempfile, os
 import time
 import gc
+
+mp.reduction.ForkingPickler.dumps = cloudpickle.dumps
 
 
 def _save_worker(save_queue: queue.Queue):
