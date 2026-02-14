@@ -746,7 +746,7 @@ class MultiPatchBSplineConnectivity:
         separated_fields: Union[dict, None] = None,
         XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
         paraview_sizes: dict = {},
-        parallel: bool = True,
+        disable_parallel: bool = False,
         verbose: bool = True,
     ) -> list[io.Mesh]:
 
@@ -791,7 +791,7 @@ class MultiPatchBSplineConnectivity:
             all_args,
             verbose=verbose,
             pbar_title="Making elements separators meshes",
-            disable_parallel=not parallel,
+            disable_parallel=disable_parallel,
         )
 
         for patch, step_meshes in enumerate(elem_separator_meshes):
@@ -814,7 +814,7 @@ class MultiPatchBSplineConnectivity:
         unique_fields: dict = {},
         separated_fields: Union[dict, None] = None,
         XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
-        parallel: bool = True,
+        disable_parallel: bool = False,
         verbose: bool = True,
     ) -> list[io.Mesh]:
         if type(n_eval_per_elem) is int:
@@ -859,7 +859,7 @@ class MultiPatchBSplineConnectivity:
             all_args,
             verbose=verbose,
             pbar_title="Making interior meshes",
-            disable_parallel=not parallel,
+            disable_parallel=disable_parallel,
         )
 
         for patch, step_meshes in enumerate(interior_meshes):
@@ -1025,7 +1025,7 @@ class MultiPatchBSplineConnectivity:
             separated_fields=separated_fields,
             XI_list=XI_list,
             verbose=verbose,
-            parallel=(not disable_parallel),
+            disable_parallel=disable_parallel,
         )
         if verbose:
             print("interior done")
@@ -1038,7 +1038,7 @@ class MultiPatchBSplineConnectivity:
             separated_fields=separated_fields,
             XI_list=XI_list,
             paraview_sizes=paraview_sizes,
-            parallel=(not disable_parallel),
+            disable_parallel=disable_parallel,
         )
         if verbose:
             print("elements borders done")
