@@ -364,34 +364,61 @@ nb_patchs : int
 npa : int
     The dimension of the parametric space of the B-splines.
 
-  >>> __init__(self, unique_nodes_inds, shape_by_patch, nb_unique_nodes)
+  >>> __init__(
+    self,
+    unique_nodes_inds: numpy.ndarray[numpy.integer],
+    shape_by_patch: numpy.ndarray[numpy.integer],
+    nb_unique_nodes: int
+)
 
-  >>> from_nodes_couples(cls, nodes_couples, shape_by_patch)
+  >>> from_nodes_couples(
+    cls,
+    nodes_couples: numpy.ndarray[numpy.integer],
+    shape_by_patch: numpy.ndarray[numpy.integer]
+) -> bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity
 
   >>> from_separated_ctrlPts(
     cls,
-    separated_ctrlPts,
-    eps=1e-10,
+    separated_ctrlPts: numpy.ndarray[numpy.floating],
+    eps: float = 1e-10,
     return_nodes_couples: bool = False
-)
+) -> bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity
 
-  >>> unpack(self, unique_field)
+  >>> unpack(self, unique_field: numpy.ndarray) -> numpy.ndarray
 
-  >>> pack(self, unpacked_field, method='mean')
+  >>> pack(
+    self,
+    unpacked_field: numpy.ndarray,
+    method: Literal['last', 'first', 'mean'] = 'mean'
+) -> numpy.ndarray
 
-  >>> separate(self, unpacked_field)
+  >>> separate(self, unpacked_field: numpy.ndarray) -> list[numpy.ndarray]
 
-  >>> agglomerate(self, separated_field)
+  >>> agglomerate(self, separated_field: list[numpy.ndarray]) -> numpy.ndarray
 
-  >>> unique_field_indices(self, field_shape, representation='separated')
+  >>> unique_field_indices(
+    self,
+    field_shape: tuple[int, ...],
+    representation: Literal['unique', 'unpacked', 'separated'] = 'separated'
+) -> Union[numpy.ndarray[numpy.integer], list[numpy.ndarray[numpy.integer]]]
 
-  >>> get_duplicate_unpacked_nodes_mask(self)
+  >>> get_duplicate_unpacked_nodes_mask(self) -> numpy.ndarray[numpy.bool]
 
-  >>> extract_exterior_borders(self, splines)
+  >>> extract_exterior_borders(
+    self,
+    splines: list[bsplyne.b_spline.BSpline]
+) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[numpy.integer]]
 
-  >>> extract_interior_borders(self, splines)
+  >>> extract_interior_borders(
+    self,
+    splines: list[bsplyne.b_spline.BSpline]
+) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[numpy.integer]]
 
-  >>> subset(self, splines, patches_to_keep)
+  >>> subset(
+    self,
+    splines: list[bsplyne.b_spline.BSpline],
+    patches_to_keep: numpy.ndarray[numpy.integer]
+) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[numpy.integer]]
 
   >>> make_control_poly_meshes(
     self,
@@ -415,7 +442,7 @@ npa : int
     separated_fields: Optional[dict] = None,
     XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
     paraview_sizes: dict = {},
-    parallel: bool = True,
+    disable_parallel: bool = False,
     verbose: bool = True
 ) -> list[meshio._mesh.Mesh]
 
@@ -428,7 +455,7 @@ npa : int
     unique_fields: dict = {},
     separated_fields: Optional[dict] = None,
     XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
-    parallel: bool = True,
+    disable_parallel: bool = False,
     verbose: bool = True
 ) -> list[meshio._mesh.Mesh]
 
@@ -462,7 +489,7 @@ npa : int
     verbose: bool = True,
     fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto',
     disable_parallel: bool = False
-)
+) -> dict[str, dict[str, typing.Union[str, int]]]
 
 
 CLASS: CouplesBSplineBorder

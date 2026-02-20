@@ -18,14 +18,16 @@ from .parallel_utils import parallel_blocks
 
 # union-find algorithm for connectivity
 @nb.njit(nb.int32(nb.int32[:], nb.int32), cache=True)
-def _find(parent, x):
+def _find(parent: np.ndarray[np.integer], x: int) -> int:
     if parent[x] != x:
         parent[x] = _find(parent, parent[x])
     return parent[x]
 
 
 @nb.njit(nb.void(nb.int32[:], nb.int32[:], nb.int32, nb.int32), cache=True)
-def _union(parent, rank, x, y):
+def _union(
+    parent: np.ndarray[np.integer], rank: np.ndarray[np.integer], x: int, y: int
+):
     rootX = _find(parent, x)
     rootY = _find(parent, y)
     if rootX != rootY:
@@ -39,7 +41,9 @@ def _union(parent, rank, x, y):
 
 
 @nb.njit(nb.int32[:](nb.int32[:, :], nb.int64), cache=True)
-def _get_unique_nodes_inds(nodes_couples, nb_nodes):
+def _get_unique_nodes_inds(
+    nodes_couples: np.ndarray[np.integer], nb_nodes: int
+) -> np.ndarray[np.integer]:
     parent = np.arange(nb_nodes, dtype=np.int32)
     rank = np.zeros(nb_nodes, dtype=np.int32)
     for a, b in nodes_couples:
@@ -83,7 +87,12 @@ class MultiPatchBSplineConnectivity:
     nb_patchs: int
     npa: int
 
-    def __init__(self, unique_nodes_inds, shape_by_patch, nb_unique_nodes):
+    def __init__(
+        self,
+        unique_nodes_inds: np.ndarray[np.integer],
+        shape_by_patch: np.ndarray[np.integer],
+        nb_unique_nodes: int,
+    ):
         """
 
         Parameters
@@ -102,7 +111,11 @@ class MultiPatchBSplineConnectivity:
         self.nb_patchs, self.npa = self.shape_by_patch.shape
 
     @classmethod
-    def from_nodes_couples(cls, nodes_couples, shape_by_patch):
+    def from_nodes_couples(
+        cls,
+        nodes_couples: np.ndarray[np.integer],
+        shape_by_patch: np.ndarray[np.integer],
+    ) -> "MultiPatchBSplineConnectivity":
         """
         Create the connectivity from a list of couples of unpacked nodes.
 
@@ -134,8 +147,11 @@ class MultiPatchBSplineConnectivity:
 
     @classmethod
     def from_separated_ctrlPts(
-        cls, separated_ctrlPts, eps=1e-10, return_nodes_couples: bool = False
-    ):
+        cls,
+        separated_ctrlPts: np.ndarray[np.floating],
+        eps: float = 1e-10,
+        return_nodes_couples: bool = False,
+    ) -> "MultiPatchBSplineConnectivity":
         """
         Create the connectivity from a list of control points given as
         a separated field by comparing every couple of points.
@@ -211,7 +227,7 @@ class MultiPatchBSplineConnectivity:
         else:
             return cls.from_nodes_couples(nodes_couples, shape_by_patch)
 
-    def unpack(self, unique_field):
+    def unpack(self, unique_field: np.ndarray) -> np.ndarray:
         """
         Extract the unpacked representation from a unique representation.
 
@@ -230,7 +246,11 @@ class MultiPatchBSplineConnectivity:
         unpacked_field = unique_field[..., self.unique_nodes_inds]
         return unpacked_field
 
-    def pack(self, unpacked_field, method="mean"):
+    def pack(
+        self,
+        unpacked_field: np.ndarray,
+        method: Literal["last", "first", "mean"] = "mean",
+    ) -> np.ndarray:
         """
         Extract the unique representation from an unpacked representation.
 
@@ -260,17 +280,20 @@ class MultiPatchBSplineConnectivity:
         elif method == "first":
             unique_field[..., self.unique_nodes_inds[::-1]] = unpacked_field[..., ::-1]
         elif method == "mean":
+            assert np.issubdtype(
+                unique_field.dtype, np.inexact
+            ), f"Can't pack using 'mean' method on {unique_field.dtype} data. Try using 'last' or 'first' method."
             np.add.at(unique_field.T, self.unique_nodes_inds, unpacked_field.T)
             counts = np.zeros(self.nb_unique_nodes, dtype="uint")
             np.add.at(counts, self.unique_nodes_inds, 1)
             unique_field /= counts
         else:
             raise NotImplementedError(
-                f"Method {method} is not implemented ! Consider using 'first' or 'mean'."
+                f"Method {method} is not implemented ! Consider using 'last', 'first' or 'mean'."
             )
         return unique_field
 
-    def separate(self, unpacked_field):
+    def separate(self, unpacked_field: np.ndarray) -> list[np.ndarray]:
         """
         Extract the separated representation from an unpacked representation.
 
@@ -297,7 +320,7 @@ class MultiPatchBSplineConnectivity:
             ind = next_ind
         return separated_field
 
-    def agglomerate(self, separated_field):
+    def agglomerate(self, separated_field: list[np.ndarray]) -> np.ndarray:
         """
         Extract the unpacked representation from a separated representation.
 
@@ -322,7 +345,11 @@ class MultiPatchBSplineConnectivity:
         )
         return unpacked_field
 
-    def unique_field_indices(self, field_shape, representation="separated"):
+    def unique_field_indices(
+        self,
+        field_shape: tuple[int, ...],
+        representation: Literal["unique", "unpacked", "separated"] = "separated",
+    ) -> Union[np.ndarray[np.integer], list[np.ndarray[np.integer]]]:
         """
         Get the unique, unpacked or separated representation of a field's unique indices.
 
@@ -363,7 +390,7 @@ class MultiPatchBSplineConnectivity:
                 f'Representation "{representation}" not recognised. Representation must either be "unique", "unpacked", or "separated" !'
             )
 
-    def get_duplicate_unpacked_nodes_mask(self):
+    def get_duplicate_unpacked_nodes_mask(self) -> np.ndarray[np.bool_]:
         """
         Returns a boolean mask indicating which nodes in the unpacked representation are duplicates.
 
@@ -379,7 +406,9 @@ class MultiPatchBSplineConnectivity:
         duplicate_nodes_mask = counts[inverse] > 1
         return duplicate_nodes_mask
 
-    def extract_exterior_borders(self, splines):
+    def extract_exterior_borders(
+        self, splines: list[BSpline]
+    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], np.ndarray[np.integer]]:
         """
         Extract exterior borders from B-spline patches.
 
@@ -472,7 +501,9 @@ class MultiPatchBSplineConnectivity:
             border_unique_to_self_unique_connectivity,
         )
 
-    def extract_interior_borders(self, splines):
+    def extract_interior_borders(
+        self, splines: list[BSpline]
+    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], np.ndarray[np.integer]]:
         """
         Extract interior borders from B-spline patches where nodes are shared between patches.
 
@@ -644,7 +675,9 @@ class MultiPatchBSplineConnectivity:
     #     border_connectivity = self.__class__(border_unique_nodes_inds, border_shape_by_patch, border_nb_unique_nodes)
     #     return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
 
-    def subset(self, splines, patches_to_keep):
+    def subset(
+        self, splines: list[BSpline], patches_to_keep: np.ndarray[np.integer]
+    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], np.ndarray[np.integer]]:
         """
         Create a subset of the multi-patch B-spline connectivity by keeping only selected patches.
 
@@ -1073,7 +1106,7 @@ class MultiPatchBSplineConnectivity:
         verbose: bool = True,
         fields_on_interior_only: Union[bool, Literal["auto"], list[str]] = "auto",
         disable_parallel: bool = False,
-    ):
+    ) -> dict[str, dict[str, Union[str, int]]]:
         """
         Save multipatch B-spline visualization data as Paraview files.
 
