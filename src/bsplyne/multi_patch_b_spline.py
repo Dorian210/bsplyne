@@ -148,7 +148,7 @@ class MultiPatchBSplineConnectivity:
     @classmethod
     def from_separated_ctrlPts(
         cls,
-        separated_ctrlPts: NDArray[np.floating],
+        separated_ctrlPts: Sequence[NDArray[np.floating]],
         eps: float = 1e-10,
         return_nodes_couples: bool = False,
     ) -> Union[
