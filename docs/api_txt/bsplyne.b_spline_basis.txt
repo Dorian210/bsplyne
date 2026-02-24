@@ -15,7 +15,7 @@ Attributes
 ----------
 p : int
     Degree of the polynomials composing the basis.
-knot : np.ndarray[np.floating]
+knot : NDArray[np.floating]
     Knot vector defining the B-spline basis. Contains non-decreasing sequence
     of parametric coordinates.
 m : int
@@ -69,7 +69,10 @@ See Also
       Create a quadratic B-spline basis with uniform knot vector:
       >>> basis = BSplineBasis(2, [0., 0., 0., 1., 1., 1.])
 
-  >>> linspace(self, n_eval_per_elem: int = 10) -> numpy.ndarray[numpy.floating]
+  >>> linspace(
+    self,
+    n_eval_per_elem: int = 10
+) -> numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]
       Generate evenly spaced points over the basis span.
       
       Creates a set of evaluation points by distributing them uniformly within each knot span
@@ -83,7 +86,7 @@ See Also
       
       Returns
       -------
-      xi : np.ndarray[np.floating]
+      xi : NDArray[np.floating]
           Array of evenly spaced points in parametric coordinates over the basis span.
       
       Notes
@@ -103,7 +106,7 @@ See Also
     self,
     n_eval_per_elem: int = 10,
     bounding_box: Optional[tuple[float, float]] = None
-) -> tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]
+) -> tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]]
       Generate points and weights for numerical integration over knot spans in the
       parametric space. Points are evenly distributed within each element (knot span),
       though spacing may vary between different elements.
@@ -118,10 +121,10 @@ See Also
       
       Returns
       -------
-      xi : np.ndarray[np.floating]
+      xi : NDArray[np.floating]
           Array of integration points in parametric coordinates, evenly spaced
           within each element.
-      dxi : np.ndarray[np.floating]
+      dxi : NDArray[np.floating]
           Array of corresponding integration weights, which may vary between elements
       
       Notes
@@ -143,7 +146,7 @@ See Also
     self,
     n_eval_per_elem: Optional[int] = None,
     bounding_box: Optional[tuple[float, float]] = None
-) -> tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]
+) -> tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]]
       Generate Gauss-Legendre quadrature points and weights for numerical integration over the B-spline basis.
       
       Parameters
@@ -157,9 +160,9 @@ See Also
       
       Returns
       -------
-      xi : np.ndarray[np.floating]
+      xi : NDArray[np.floating]
           Array of Gauss-Legendre quadrature points in parametric coordinates.
-      dxi : np.ndarray[np.floating]
+      dxi : NDArray[np.floating]
           Array of corresponding integration weights.
       
       Notes
@@ -198,14 +201,14 @@ See Also
 
   >>> N(
     self,
-    XI: numpy.ndarray[numpy.floating],
+    XI: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
     k: int = 0
 ) -> scipy.sparse._coo.coo_matrix
       Compute the k-th derivative of the B-spline basis functions at specified points.
       
       Parameters
       ----------
-      XI : np.ndarray[np.floating]
+      XI : NDArray[np.floating]
           Points in the parametric space at which to evaluate the basis functions.
       k : int, optional
           Order of the derivative to compute. By default, 0.
@@ -239,7 +242,7 @@ See Also
   >>> from_dict(cls, data: dict) -> bsplyne.b_spline_basis.BSplineBasis
       Creates a BSplineBasis object from a dictionary representation.
 
-  >>> save(self, filepath: str) -> None
+  >>> save(self, filepath: str)
       Save the BSplineBasis object to a file.
       Control points are optional.
       Supported extensions: json, pkl
@@ -279,13 +282,13 @@ See Also
 
   >>> knotInsertion(
     self,
-    knots_to_add: numpy.ndarray[numpy.floating]
+    knots_to_add: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]
 ) -> scipy.sparse._coo.coo_matrix
       Insert knots into the B-spline basis and return the transformation matrix.
       
       Parameters
       ----------
-      knots_to_add : np.ndarray[np.floating]
+      knots_to_add : NDArray[np.floating]
           Array of knots to insert into the knot vector.
       
       Returns
@@ -355,7 +358,7 @@ See Also
   >>> greville_abscissa(
     self,
     return_weights: bool = False
-) -> Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], numpy.ndarray[numpy.floating]]]
+) -> Union[numpy.ndarray[Any, numpy.dtype[numpy.floating]], tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], numpy.ndarray[Any, numpy.dtype[numpy.floating]]]]
       Compute the Greville abscissa and optionally their weights for this 1D B-spline basis.
       
       The Greville abscissa represent the parametric coordinates associated with each
@@ -369,11 +372,11 @@ See Also
       
       Returns
       -------
-      greville : np.ndarray[np.floating]
+      greville : NDArray[np.floating]
           Array containing the Greville abscissa of size `n + 1`, where `n` is the last index
           of the basis functions in this 1D basis.
       
-      weight : np.ndarray[np.floating], optional
+      weight : NDArray[np.floating], optional
           Only returned if `return_weights` is `True`.
           Array of the same size as `greville`, containing the length of the support of
           each basis function (difference between the end and start knots of its support).

@@ -14,9 +14,9 @@ It uses 3 representations of the data :
 
 Attributes
 ----------
-unique_nodes_inds : np.ndarray[np.integer]
+unique_nodes_inds : NDArray[np.integer]
     The indices of the unique representation needed to create the unpacked one.
-shape_by_patch : np.ndarray[np.integer]
+shape_by_patch : NDArray[np.integer]
     The shape of the separated nodes by patch.
 nb_nodes : int
     The total number of unpacked nodes.
@@ -29,32 +29,32 @@ npa : int
 
   >>> __init__(
     self,
-    unique_nodes_inds: numpy.ndarray[numpy.integer],
-    shape_by_patch: numpy.ndarray[numpy.integer],
+    unique_nodes_inds: numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]],
+    shape_by_patch: numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]],
     nb_unique_nodes: int
 )
       Parameters
       ----------
-      unique_nodes_inds : np.ndarray[np.integer]
+      unique_nodes_inds : NDArray[np.integer]
           The indices of the unique representation needed to create the unpacked one.
-      shape_by_patch : np.ndarray[np.integer]
+      shape_by_patch : NDArray[np.integer]
           The shape of the separated nodes by patch.
       nb_unique_nodes : int
           The total number of unique nodes.
 
   >>> from_nodes_couples(
     cls,
-    nodes_couples: numpy.ndarray[numpy.integer],
-    shape_by_patch: numpy.ndarray[numpy.integer]
+    nodes_couples: numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]],
+    shape_by_patch: numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]]
 ) -> bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity
       Create the connectivity from a list of couples of unpacked nodes.
       
       Parameters
       ----------
-      nodes_couples : np.ndarray[np.integer]
+      nodes_couples : NDArray[np.integer]
           Couples of indices of unpacked nodes that are considered the same.
           Its shape should be (# of couples, 2)
-      shape_by_patch : np.ndarray[np.integer]
+      shape_by_patch : NDArray[np.integer]
           The shape of the separated nodes by patch.
       
       Returns
@@ -64,54 +64,78 @@ npa : int
 
   >>> from_separated_ctrlPts(
     cls,
-    separated_ctrlPts: numpy.ndarray[numpy.floating],
+    separated_ctrlPts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
     eps: float = 1e-10,
     return_nodes_couples: bool = False
-) -> bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity
-      Create the connectivity from a list of control points given as
-      a separated field by comparing every couple of points.
+) -> Union[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, numpy.ndarray[Any, numpy.dtype[numpy.integer]]]]
+      Construct a multi-patch connectivity from separated control points.
+      
+      This method compares control points from each patch to identify
+      nodes that are coincident (within a tolerance `eps`) and builds
+      the connectivity information needed to link multiple B-spline patches.
       
       Parameters
       ----------
-      separated_ctrlPts : list of np.ndarray[np.floating]
-          Control points of every patch to be compared in the separated
-          representation. Every array is of shape :
-          (``NPh``, nb elem for dim 1, ..., nb elem for dim ``npa``)
+      separated_ctrlPts : list of NDArray[np.floating]
+          Control points of each patch in a separated representation.
+          Each array has shape (`NPh`, nb_elem_dim1, ..., nb_elem_dimN), where
+          `NPh` is the number of physical dimensions, and nb_elem_dim* is the
+          number of control points along that dimension.
       eps : float, optional
-          Maximum distance between two points to be considered the same, by default 1e-10
+          Maximum distance between two points to be considered identical.
+          Default is 1e-10.
       return_nodes_couples : bool, optional
-          If `True`, returns the `nodes_couples` created, by default False
+          If `True`, also return the list of node index pairs (`nodes_couples`)
+          that were matched across patches. Default is `False`.
       
       Returns
       -------
       MultiPatchBSplineConnectivity
-          Instance of `MultiPatchBSplineConnectivity` created.
+          A new instance of `MultiPatchBSplineConnectivity` with connectivity
+          information built from the provided control points.
+      tuple[MultiPatchBSplineConnectivity, NDArray[np.integer]], optional
+          If `return_nodes_couples` is True, also return the `nodes_couples`
+          array of shape `(n_pairs, 2)` indicating indices of coincident nodes.
+      
+      Notes
+      -----
+      - Uses a KD-tree (`scipy.spatial.cKDTree`) to efficiently detect
+      coincident nodes across patches.
+      - The method assumes all patches have the same number of physical
+      dimensions (`NPh`).
+      - The returned `nodes_couples` array contains pairs of node indices
+      across different patches that are within the tolerance `eps`.
+      - This method replaces an older pairwise distance comparison
+      implementation with a more efficient KD-tree approach.
 
-  >>> unpack(self, unique_field: numpy.ndarray) -> numpy.ndarray
+  >>> unpack(
+    self,
+    unique_field: numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]
+) -> numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]
       Extract the unpacked representation from a unique representation.
       
       Parameters
       ----------
-      unique_field : np.ndarray
+      unique_field : NDArray
           The unique representation. Its shape should be :
           (field, shape, ..., `self`.`nb_unique_nodes`)
       
       Returns
       -------
-      unpacked_field : np.ndarray
+      unpacked_field : NDArray
           The unpacked representation. Its shape is :
           (field, shape, ..., `self`.`nb_nodes`)
 
   >>> pack(
     self,
-    unpacked_field: numpy.ndarray,
+    unpacked_field: numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]],
     method: Literal['last', 'first', 'mean'] = 'mean'
-) -> numpy.ndarray
+) -> numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]
       Extract the unique representation from an unpacked representation.
       
       Parameters
       ----------
-      unpacked_field : np.ndarray
+      unpacked_field : NDArray
           The unpacked representation. Its shape should be :
           (field, shape, ..., `self`.`nb_nodes`)
       method: str
@@ -122,37 +146,43 @@ npa : int
       
       Returns
       -------
-      unique_nodes : np.ndarray
+      unique_nodes : NDArray
           The unique representation. Its shape is :
           (field, shape, ..., `self`.`nb_unique_nodes`)
 
-  >>> separate(self, unpacked_field: numpy.ndarray) -> list[numpy.ndarray]
+  >>> separate(
+    self,
+    unpacked_field: numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]
+) -> list[numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]]
       Extract the separated representation from an unpacked representation.
       
       Parameters
       ----------
-      unpacked_field : np.ndarray
+      unpacked_field : NDArray
           The unpacked representation. Its shape is :
           (field, shape, ..., `self`.`nb_nodes`)
       
       Returns
       -------
-      separated_field : list of np.ndarray
+      separated_field : list of NDArray
           The separated representation. Every array is of shape :
           (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
 
-  >>> agglomerate(self, separated_field: list[numpy.ndarray]) -> numpy.ndarray
+  >>> agglomerate(
+    self,
+    separated_field: Sequence[numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]]
+) -> numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]
       Extract the unpacked representation from a separated representation.
       
       Parameters
       ----------
-      separated_field : list of np.ndarray
+      separated_field : Sequence of NDArray
           The separated representation. Every array is of shape :
           (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
       
       Returns
       -------
-      unpacked_field : np.ndarray
+      unpacked_field : NDArray
           The unpacked representation. Its shape is :
           (field, shape, ..., `self`.`nb_nodes`)
 
@@ -160,7 +190,7 @@ npa : int
     self,
     field_shape: tuple[int, ...],
     representation: Literal['unique', 'unpacked', 'separated'] = 'separated'
-) -> Union[numpy.ndarray[numpy.integer], list[numpy.ndarray[numpy.integer]]]
+) -> Union[numpy.ndarray[Any, numpy.dtype[numpy.integer]], list[numpy.ndarray[Any, numpy.dtype[numpy.integer]]]]
       Get the unique, unpacked or separated representation of a field's unique indices.
       
       Parameters
@@ -174,31 +204,31 @@ npa : int
       
       Returns
       -------
-      unique_field_indices : np.ndarray[np.integer] or list of np.ndarray[np.integer]
+      unique_field_indices : NDArray[np.integer] or list of NDArray[np.integer]
           The unique, unpacked or separated representation of a field's unique indices.
           If unique, its shape is (*`field_shape`, `self`.`nb_unique_nodes`).
           If unpacked, its shape is : (*`field_shape`, `self`.`nb_nodes`).
           If separated, every array is of shape : (*`field_shape`, nb elem for dim 1, ..., nb elem for dim `npa`).
 
-  >>> get_duplicate_unpacked_nodes_mask(self) -> numpy.ndarray[numpy.bool]
+  >>> get_duplicate_unpacked_nodes_mask(self) -> numpy.ndarray[typing.Any, numpy.dtype[numpy.bool]]
       Returns a boolean mask indicating which nodes in the unpacked representation are duplicates.
       
       Returns
       -------
-      duplicate_nodes_mask : np.ndarray
+      duplicate_nodes_mask : NDArray of bool
           Boolean mask of shape (nb_nodes,) where True indicates a node is duplicated
           across multiple patches and False indicates it appears only once.
 
   >>> extract_exterior_borders(
     self,
-    splines: list[bsplyne.b_spline.BSpline]
-) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[numpy.integer]]
+    splines: Sequence[bsplyne.b_spline.BSpline]
+) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]]]
       Extract exterior borders from B-spline patches.
       
       Parameters
       ----------
-      splines : list[BSpline]
-          Array of B-spline patches to extract borders from.
+      splines : Sequence[BSpline]
+          Sequence of B-spline patches to extract borders from.
       
       Returns
       -------
@@ -206,7 +236,7 @@ npa : int
           Connectivity information for the border patches.
       border_splines : list[BSpline]
           Array of B-spline patches representing the borders.
-      border_unique_to_self_unique_connectivity : np.ndarray[np.integer]
+      border_unique_to_self_unique_connectivity : NDArray[np.integer]
           Array mapping border unique nodes to original unique nodes.
       
       Raises
@@ -216,22 +246,22 @@ npa : int
 
   >>> extract_interior_borders(
     self,
-    splines: list[bsplyne.b_spline.BSpline]
-) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[numpy.integer]]
+    splines: Sequence[bsplyne.b_spline.BSpline]
+) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]]]
       Extract interior borders from B-spline patches where nodes are shared between patches.
       
       Parameters
       ----------
-      splines : list[BSpline]
-          Array of B-spline patches to extract borders from.
+      splines : Sequence[BSpline]
+          Sequence of B-spline patches to extract borders from.
       
       Returns
       -------
       border_connectivity : MultiPatchBSplineConnectivity
           Connectivity information for the border patches.
       border_splines : list[BSpline]
-          Array of B-spline patches representing the borders.
-      border_unique_to_self_unique_connectivity : np.ndarray[np.integer]
+          List of B-spline patches representing the borders.
+      border_unique_to_self_unique_connectivity : NDArray[np.integer]
           Array mapping border unique nodes to original unique nodes.
       
       Raises
@@ -241,16 +271,16 @@ npa : int
 
   >>> subset(
     self,
-    splines: list[bsplyne.b_spline.BSpline],
-    patches_to_keep: numpy.ndarray[numpy.integer]
-) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[numpy.integer]]
+    splines: Sequence[bsplyne.b_spline.BSpline],
+    patches_to_keep: numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]]
+) -> tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, list[bsplyne.b_spline.BSpline], numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]]]
       Create a subset of the multi-patch B-spline connectivity by keeping only selected patches.
       
       Parameters
       ----------
-      splines : list[BSpline]
-          Array of B-spline patches to subset.
-      patches_to_keep : np.ndarray[np.integer]
+      splines : Sequence[BSpline]
+          Sequence of B-spline patches to subset.
+      patches_to_keep : NDArray[np.integer]
           Indices of patches to keep in the subset.
       
       Returns
@@ -259,30 +289,30 @@ npa : int
           New connectivity object containing only the selected patches.
       new_splines : list[BSpline]
           Array of B-spline patches for the selected patches.
-      new_unique_to_self_unique_connectivity : np.ndarray[np.integer]
+      new_unique_to_self_unique_connectivity : NDArray[np.integer]
           Array mapping new unique nodes to original unique nodes.
 
   >>> make_control_poly_meshes(
     self,
-    splines: Iterable[bsplyne.b_spline.BSpline],
-    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
-    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    splines: Sequence[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]],
+    n_eval_per_elem: Union[Sequence[int], int] = 10,
     n_step: int = 1,
     unique_fields: dict = {},
-    separated_fields: Optional[dict] = None,
-    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    separated_fields: Optional[Sequence[dict]] = None,
+    XI_list: Optional[Sequence[Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]]]] = None,
     paraview_sizes: dict = {}
 ) -> list[meshio._mesh.Mesh]
 
   >>> make_elem_separator_meshes(
     self,
-    splines: Iterable[bsplyne.b_spline.BSpline],
-    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
-    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    splines: Sequence[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]],
+    n_eval_per_elem: Union[Sequence[int], int] = 10,
     n_step: int = 1,
     unique_fields: dict = {},
-    separated_fields: Optional[dict] = None,
-    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    separated_fields: Optional[Sequence[dict]] = None,
+    XI_list: Optional[Sequence[Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]]]] = None,
     paraview_sizes: dict = {},
     disable_parallel: bool = False,
     verbose: bool = True
@@ -290,26 +320,26 @@ npa : int
 
   >>> make_elements_interior_meshes(
     self,
-    splines: Iterable[bsplyne.b_spline.BSpline],
-    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
-    n_eval_per_elem: Union[Iterable[int], int] = 10,
+    splines: Sequence[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]],
+    n_eval_per_elem: Union[Sequence[int], int] = 10,
     n_step: int = 1,
     unique_fields: dict = {},
-    separated_fields: Optional[dict] = None,
-    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    separated_fields: Optional[Sequence[dict]] = None,
+    XI_list: Optional[Sequence[Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]]]] = None,
     disable_parallel: bool = False,
     verbose: bool = True
 ) -> list[meshio._mesh.Mesh]
 
   >>> make_all_meshes(
     self,
-    splines: Iterable[bsplyne.b_spline.BSpline],
-    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    splines: Sequence[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]],
     n_step: int = 1,
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     unique_fields: dict = {},
-    separated_fields: Optional[list[dict]] = None,
-    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    separated_fields: Optional[Sequence[dict]] = None,
+    XI_list: Optional[Sequence[Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]]]] = None,
     verbose: bool = True,
     fields_on_interior_only: Union[bool, Literal['auto'], list[str]] = 'auto',
     disable_parallel: bool = False
@@ -323,32 +353,32 @@ npa : int
       
       Parameters
       ----------
-      splines : Iterable[BSpline]
+      splines : Sequence[BSpline]
           List of B-spline patches to process.
-      separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+      separated_ctrl_pts : Sequence[NDArray[np.floating]]
           Control points for each patch in separated representation.
       n_step : int, optional
           Number of time steps to generate. By default, 1.
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
-          If an `Iterable` is provided, each value corresponds to a different dimension.
+          If an `Sequence` is provided, each value corresponds to a different dimension.
           By default, 10.
       unique_fields : dict, optional
           Fields in unique representation to visualize. By default, `{}`.
           Keys are field names, values are arrays (not callables nor FE fields).
-      separated_fields : Union[list[dict], None], optional
+      separated_fields : Union[Sequence[dict], None], optional
           Fields to visualize at each time step.
-          List of `self.nb_patchs` dictionaries (one per patch) of format:
+          Sequence of `self.nb_patchs` dictionaries (one per patch) of format:
           {
               "field_name": `field_value`
           }
           where `field_value` can be either:
-          1. A `np.ndarray` with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`)
-          2. A `np.ndarray` with shape (`n_step`, `field_size`, `*grid_shape`)
-          3. A function that computes field values (`np.ndarray[np.floating]`) at given points from the `BSpline` instance and `XI`.
+          1. A `NDArray` with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`)
+          2. A `NDArray` with shape (`n_step`, `field_size`, `*grid_shape`)
+          3. A function that computes field values (`NDArray[np.floating]`) at given points from the `BSpline` instance and `XI`.
           By default, None.
-      XI_list : Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]], optional
+      XI_list : Union[None, Sequence[Union[tuple[NDArray[np.floating], ...], None]]], optional
           Parametric coordinates at which to evaluate the B-spline patches and fields.
           If not `None`, overrides the `n_eval_per_elem` parameter.
           If `None`, regular grids are generated according to `n_eval_per_elem`.
@@ -391,15 +421,15 @@ npa : int
 
   >>> save_paraview(
     self,
-    splines: Iterable[bsplyne.b_spline.BSpline],
-    separated_ctrl_pts: Iterable[numpy.ndarray[numpy.floating]],
+    splines: Sequence[bsplyne.b_spline.BSpline],
+    separated_ctrl_pts: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]],
     path: str,
     name: str,
     n_step: int = 1,
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     unique_fields: dict = {},
     separated_fields: Optional[list[dict]] = None,
-    XI_list: Optional[Iterable[tuple[numpy.ndarray[numpy.floating], ...]]] = None,
+    XI_list: Optional[Sequence[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]]] = None,
     groups: Optional[dict[str, dict[str, Union[str, int]]]] = None,
     make_pvd: bool = True,
     verbose: bool = True,
@@ -417,9 +447,9 @@ npa : int
       
       Parameters
       ----------
-      splines : Iterable[BSpline]
+      splines : Sequence[BSpline]
           List of B-spline patches to save.
-      separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+      separated_ctrl_pts : Sequence[NDArray[np.floating]]
           Control points for each patch in separated representation.
       path : str
           Directory path where the files will be saved.
@@ -427,10 +457,10 @@ npa : int
           Base name for the output files.
       n_step : int, optional
           Number of time steps to save. By default, 1.
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
-          If an `Iterable` is provided, each value corresponds to a different dimension.
+          If an `Sequence` is provided, each value corresponds to a different dimension.
           By default, 10.
       unique_fields : dict, optional
           Fields in unique representation to save. By default, `{}`.
@@ -453,16 +483,16 @@ npa : int
           - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
           - `*grid_shape`: Shape of the evaluation grid (number of points along each parametric axis)
       
-          3. A function that computes field values (`np.ndarray[np.floating]`) at given
+          3. A function that computes field values (`NDArray[np.floating]`) at given
           points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
-          points for each dimension (`tuple[np.ndarray[np.floating], ...]`).
+          points for each dimension (`tuple[NDArray[np.floating], ...]`).
           The result should be an array of shape (`n_step`, `n_points`, `field_size`) where:
           - `n_step`: Number of time steps
           - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
           - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
       
           By default, None.
-      XI_list : Iterable[tuple[np.ndarray[np.floating], ...]], optional
+      XI_list : Sequence[tuple[NDArray[np.floating], ...]], optional
           Parametric coordinates at which to evaluate the B-spline patches and fields.
           If not `None`, overrides the `n_eval_per_elem` parameter.
           If `None`, regular grids are generated according to `n_eval_per_elem`.
@@ -568,7 +598,7 @@ CLASS: CouplesBSplineBorder
     self,
     couple_ind: int,
     splines: list[bsplyne.b_spline.BSpline],
-    XI1_border: list[numpy.ndarray],
+    XI1_border: list[numpy.ndarray[typing.Any, numpy.dtype[+_ScalarType_co]]],
     k1: list[int]
 )
 

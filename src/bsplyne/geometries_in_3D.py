@@ -1120,10 +1120,10 @@ def new_quarter_strut(center_front, orientation, radius, length):
     # y = radius*np.linspace(0, np.sqrt(2), C.size)
     # ctrlPts[0, :, 0,  0] = x
     # ctrlPts[1, :, 0,  0] = y
-    ctrlPts[2, :, 0, 0] = z
+    ctrlPts[2, :, 0, 0] = z  # type: ignore
     # ctrlPts[0, :, 0, -1] = x
     # ctrlPts[1, :, 0, -1] = y
-    ctrlPts[2, :, 0, -1] = length - z
+    ctrlPts[2, :, 0, -1] = length - z  # type: ignore
 
     scale_vector = np.array([1, 1, 1], dtype="float")
 

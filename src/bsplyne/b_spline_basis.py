@@ -1,6 +1,7 @@
 from typing import Iterable, Union
 import json, pickle
 import numpy as np
+from numpy.typing import NDArray
 import numba as nb
 import scipy.sparse as sps
 from scipy.special import comb
@@ -20,7 +21,7 @@ class BSplineBasis:
     ----------
     p : int
         Degree of the polynomials composing the basis.
-    knot : np.ndarray[np.floating]
+    knot : NDArray[np.floating]
         Knot vector defining the B-spline basis. Contains non-decreasing sequence
         of parametric coordinates.
     m : int
@@ -44,7 +45,7 @@ class BSplineBasis:
     """
 
     p: int
-    knot: np.ndarray[np.floating]
+    knot: NDArray[np.floating]
     m: int
     n: int
     span: tuple[float, float]
@@ -88,7 +89,7 @@ class BSplineBasis:
         self.n = self.m - self.p - 1
         self.span = (self.knot[self.p], self.knot[self.m - self.p])
 
-    def linspace(self, n_eval_per_elem: int = 10) -> np.ndarray[np.floating]:
+    def linspace(self, n_eval_per_elem: int = 10) -> NDArray[np.floating]:
         """
         Generate evenly spaced points over the basis span.
 
@@ -103,7 +104,7 @@ class BSplineBasis:
 
         Returns
         -------
-        xi : np.ndarray[np.floating]
+        xi : NDArray[np.floating]
             Array of evenly spaced points in parametric coordinates over the basis span.
 
         Notes
@@ -138,7 +139,7 @@ class BSplineBasis:
         self,
         n_eval_per_elem: int = 10,
         bounding_box: Union[tuple[float, float], None] = None,
-    ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
         """
         Generate points and weights for numerical integration over knot spans in the
         parametric space. Points are evenly distributed within each element (knot span),
@@ -154,10 +155,10 @@ class BSplineBasis:
 
         Returns
         -------
-        xi : np.ndarray[np.floating]
+        xi : NDArray[np.floating]
             Array of integration points in parametric coordinates, evenly spaced
             within each element.
-        dxi : np.ndarray[np.floating]
+        dxi : NDArray[np.floating]
             Array of corresponding integration weights, which may vary between elements
 
         Notes
@@ -235,7 +236,7 @@ class BSplineBasis:
         self,
         n_eval_per_elem: Union[int, None] = None,
         bounding_box: Union[tuple[float, float], None] = None,
-    ) -> tuple[np.ndarray[np.floating], np.ndarray[np.floating]]:
+    ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
         """
         Generate Gauss-Legendre quadrature points and weights for numerical integration over the B-spline basis.
 
@@ -250,9 +251,9 @@ class BSplineBasis:
 
         Returns
         -------
-        xi : np.ndarray[np.floating]
+        xi : NDArray[np.floating]
             Array of Gauss-Legendre quadrature points in parametric coordinates.
-        dxi : np.ndarray[np.floating]
+        dxi : NDArray[np.floating]
             Array of corresponding integration weights.
 
         Notes
@@ -321,13 +322,13 @@ class BSplineBasis:
         self.knot = (self.knot - a) / (b - a)
         self.span = (0, 1)
 
-    def N(self, XI: np.ndarray[np.floating], k: int = 0) -> sps.coo_matrix:
+    def N(self, XI: NDArray[np.floating], k: int = 0) -> sps.coo_matrix:
         """
         Compute the k-th derivative of the B-spline basis functions at specified points.
 
         Parameters
         ----------
-        XI : np.ndarray[np.floating]
+        XI : NDArray[np.floating]
             Points in the parametric space at which to evaluate the basis functions.
         k : int, optional
             Order of the derivative to compute. By default, 0.
@@ -384,7 +385,7 @@ class BSplineBasis:
         this.span = data["span"]
         return this
 
-    def save(self, filepath: str) -> None:
+    def save(self, filepath: str):
         """
         Save the BSplineBasis object to a file.
         Control points are optional.
@@ -501,7 +502,9 @@ class BSplineBasis:
         if show:
             plt.show()
 
-    def _funcDElem(self, i, j, new_knot, p):
+    def _funcDElem(
+        self, i: int, j: int, new_knot: NDArray[np.floating], p: int
+    ) -> float:
         """
         Compute the ij value of the knot insertion matrix D.
 
@@ -511,7 +514,7 @@ class BSplineBasis:
             Row index of D.
         j : int
             Column index of D.
-        new_knot : np.ndarray[np.floating]
+        new_knot : NDArray[np.floating]
             New knot vector to use.
         p : int
             Degree of the BSpline.
@@ -539,7 +542,7 @@ class BSplineBasis:
         D_ij = rec_p + rec_j
         return D_ij
 
-    def _D(self, new_knot):
+    def _D(self, new_knot: NDArray[np.floating]) -> sps.coo_matrix:
         """
         Compute the `D` matrix used to determine the position of the new control
         points for the knot insertion process. The instance of `BSplineBasis`
@@ -547,7 +550,7 @@ class BSplineBasis:
 
         Parameters
         ----------
-        new_knot : np.ndarray[np.floating]
+        new_knot : NDArray[np.floating]
             The new knot vector for the knot insertion.
 
         Returns
@@ -590,13 +593,13 @@ class BSplineBasis:
         D = sps.coo_matrix((vals, (row, col)), shape=(new_n + 1, self.n + 1))
         return D
 
-    def knotInsertion(self, knots_to_add: np.ndarray[np.floating]) -> sps.coo_matrix:
+    def knotInsertion(self, knots_to_add: NDArray[np.floating]) -> sps.coo_matrix:
         """
         Insert knots into the B-spline basis and return the transformation matrix.
 
         Parameters
         ----------
-        knots_to_add : np.ndarray[np.floating]
+        knots_to_add : NDArray[np.floating]
             Array of knots to insert into the knot vector.
 
         Returns
@@ -730,9 +733,7 @@ class BSplineBasis:
 
     def greville_abscissa(
         self, return_weights: bool = False
-    ) -> Union[
-        np.ndarray[np.floating], tuple[np.ndarray[np.floating], np.ndarray[np.floating]]
-    ]:
+    ) -> Union[NDArray[np.floating], tuple[NDArray[np.floating], NDArray[np.floating]]]:
         r"""
         Compute the Greville abscissa and optionally their weights for this 1D B-spline basis.
 
@@ -747,11 +748,11 @@ class BSplineBasis:
 
         Returns
         -------
-        greville : np.ndarray[np.floating]
+        greville : NDArray[np.floating]
             Array containing the Greville abscissa of size `n + 1`, where `n` is the last index
             of the basis functions in this 1D basis.
 
-        weight : np.ndarray[np.floating], optional
+        weight : NDArray[np.floating], optional
             Only returned if `return_weights` is `True`.
             Array of the same size as `greville`, containing the length of the support of
             each basis function (difference between the end and start knots of its support).
@@ -802,7 +803,7 @@ def _funcNElemOneXi(i, p, knot, xi):
         Index of the basis function wanted.
     p : int
         Degree of the BSpline evaluated.
-    knot : np.ndarray[np.floating]
+    knot : NDArray[np.floating]
         Knot vector of the BSpline basis.
     xi : float
         Value in the parametric space at which the BSpline is evaluated.
@@ -846,7 +847,7 @@ def _funcDNElemOneXi(i, p, knot, xi, k):
         Index of the basis function wanted.
     p : int
         Degree of the BSpline evaluated.
-    knot : np.ndarray[np.floating]
+    knot : NDArray[np.floating]
         Knot vector of the BSpline basis.
     xi : float
         Value in the parametric space at which the BSpline is evaluated.
@@ -904,7 +905,7 @@ def _findElem(p, m, n, knot, xi):
         Last index of the knot vector.
     n : int
         Last index of the basis.
-    knot : np.ndarray[np.floating]
+    knot : NDArray[np.floating]
         Knot vector of the BSpline basis.
     xi : float
         Value in the parametric space.
@@ -939,7 +940,7 @@ def _findElem(p, m, n, knot, xi):
 @nb.njit(
     nb.types.UniTuple.from_types((nb.float64[:], nb.int64[:], nb.int64[:]))(
         nb.int64, nb.int64, nb.int64, nb.float64[:], nb.float64[:], nb.int64
-    ),
+    ),  # type: ignore
     cache=True,
 )
 def _DN(p, m, n, knot, XI, k):
@@ -955,16 +956,16 @@ def _DN(p, m, n, knot, XI, k):
         Last index of the knot vector.
     n : int
         Last index of the basis.
-    knot : np.ndarray[np.floating]
+    knot : NDArray[np.floating]
         Knot vector of the BSpline basis.
-    XI : np.ndarray[np.floating]
+    XI : NDArray[np.floating]
         Values in the parametric space at which the BSpline is evaluated.
     k : int
         `k`-th derivative of the BSpline evaluated. The default is 0.
 
     Returns
     -------
-    (vals, row, col) : (np.ndarray[np.floating], np.ndarray[np.integer], np.ndarray[np.integer])
+    (vals, row, col) : (NDArray[np.floating], NDArray[np.integer], NDArray[np.integer])
         Values and indices of the `k`-th derivative matrix of the BSpline
         basis functions in the columns for each value of `XI` in the rows.
 

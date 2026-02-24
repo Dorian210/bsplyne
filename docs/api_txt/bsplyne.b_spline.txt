@@ -13,8 +13,8 @@ Attributes
 ----------
 NPa : int
     Dimension of the parametric space.
-bases : np.ndarray[BSplineBasis]
-    Array containing `BSplineBasis` instances for each parametric dimension.
+bases : list[BSplineBasis]
+    List containing `BSplineBasis` instances for each parametric dimension.
 
 Notes
 -----
@@ -31,8 +31,8 @@ See Also
 
   >>> __init__(
     self,
-    degrees: Iterable[int],
-    knots: Iterable[numpy.ndarray[numpy.floating]]
+    degrees: Union[Sequence[int], numpy.ndarray[Any, numpy.dtype[numpy.integer]]],
+    knots: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]]
 )
       Initialize a `BSpline` instance with specified degrees and knot vectors.
       
@@ -41,7 +41,7 @@ See Also
       
       Parameters
       ----------
-      degrees : Iterable[int]
+      degrees : Sequence[int]
           Collection of polynomial degrees for each parametric dimension.
           The length determines the dimensionality of the parametric space (`NPa`).
           For example:
@@ -50,7 +50,7 @@ See Also
           - [p, q, r] for a volume
           - ...
       
-      knots : Iterable[np.ndarray[np.floating]]
+      knots : Sequence[NDArray[np.floating]]
           Collection of knot vectors for each parametric dimension.
           Each knot vector must be a numpy array of `floats`.
           The number of knot vectors must match the number of degrees.
@@ -78,17 +78,17 @@ See Also
 
   >>> from_bases(
     cls,
-    bases: Iterable[bsplyne.b_spline_basis.BSplineBasis]
+    bases: Union[Sequence[bsplyne.b_spline_basis.BSplineBasis], numpy.ndarray[Any, numpy.dtype[numpy.object_]]]
 ) -> bsplyne.b_spline.BSpline
-      Create a BSpline instance from an array of `BSplineBasis` objects.
+      Create a BSpline instance from a sequence of `BSplineBasis` objects.
       This is an alternative constructor that allows direct initialization from
       existing basis functions rather than creating new ones from degrees and knot
       vectors.
       
       Parameters
       ----------
-      bases : Iterable[BSplineBasis]
-          An iterable (e.g. list, tuple, array) containing `BSplineBasis` instances.
+      bases : Union[Sequence[BSplineBasis], NDArray[np.object_]]
+          A sequence (e.g. list, tuple, array) containing `BSplineBasis` instances.
           Each basis represents one parametric dimension of the resulting B-spline.
           The number of bases determines the dimensionality of the parametric space.
       
@@ -100,7 +100,7 @@ See Also
       Notes
       -----
       - The method initializes a new `BSpline` instance with empty degrees and knots
-      - The bases array is populated with the provided `BSplineBasis` objects
+      - The bases list is populated with the provided `BSplineBasis` objects
       - The dimensionality (`NPa`) is determined by the number of basis functions
       
       Examples
@@ -109,12 +109,12 @@ See Also
       >>> basis2 = BSplineBasis(2, np.array([0, 0, 0, 0.5, 1, 1, 1]))
       >>> spline = BSpline.from_bases([basis1, basis2])
 
-  >>> getDegrees(self) -> numpy.ndarray[numpy.integer]
+  >>> getDegrees(self) -> numpy.ndarray[typing.Any, numpy.dtype[numpy.integer]]
       Returns the polynomial degree of each basis function in the parametric space.
       
       Returns
       -------
-      degrees : np.ndarray[np.integer]
+      degrees : NDArray[np.integer]
           Array containing the polynomial degrees of the B-spline basis functions.
           The array has length `NPa` (dimension of parametric space), where each element
           represents the degree of the corresponding parametric dimension.
@@ -135,16 +135,16 @@ See Also
       >>> spline.getDegrees()
       array([2, 2])
 
-  >>> getKnots(self) -> list[numpy.ndarray[numpy.floating]]
+  >>> getKnots(self) -> list[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]]
       Returns the knot vector of each basis function in the parametric space.
       
       This method collects all knot vectors from each `BSplineBasis` instance stored
-      in the `bases` array. The knot vectors define the parametric space partitioning
+      in the `bases` list. The knot vectors define the parametric space partitioning
       and the regularity properties of the B-spline.
       
       Returns
       -------
-      knots : list[np.ndarray[np.floating]]
+      knots : list[NDArray[np.floating]]
           List containing the knot vectors of the B-spline basis functions.
           The list has length `NPa` (dimension of parametric space), where each element
           is a `numpy.ndarray` containing the knots for the corresponding parametric dimension.
@@ -167,7 +167,7 @@ See Also
       [array([0., 0., 0., 0.5, 1., 1., 1.]),
        array([0., 0., 0., 0.5, 1., 1., 1.])]
 
-  >>> getCtrlShape(self) -> tuple[int]
+  >>> getCtrlShape(self) -> tuple[int, ...]
       Get the shape of the control grid (number of control points per dimension).
       
       This method returns a tuple giving, for each parametric direction,
@@ -230,7 +230,7 @@ See Also
       Returns the span of each basis function in the parametric space.
       
       This method collects the spans (intervals of definition) from each `BSplineBasis`
-      instance stored in the `bases` array.
+      instance stored in the `bases` list.
       
       Returns
       -------
@@ -260,24 +260,24 @@ See Also
 
   >>> linspace(
     self,
-    n_eval_per_elem: Union[int, Iterable[int]] = 10
-) -> tuple[numpy.ndarray[numpy.floating], ...]
+    n_eval_per_elem: Union[int, Sequence[int], numpy.ndarray[Any, numpy.dtype[numpy.integer]]] = 10
+) -> tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], ...]
       Generate sets of evaluation points over the span of each basis in the parametric space.
       
       This method creates evenly spaced points for each parametric dimension by calling
-      `linspace` on each `BSplineBasis` instance stored in the `bases` array.
+      `linspace` on each `BSplineBasis` instance stored in the `bases` list.
       
       Parameters
       ----------
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
-          If an `Iterable` is provided, each value corresponds to a different dimension.
+          If an `Sequence` is provided, each value corresponds to a different dimension.
           By default, 10.
       
       Returns
       -------
-      XI : tuple[np.ndarray[np.floating], ...]
+      XI : tuple[NDArray[np.floating], ...]
           Tuple containing arrays of evaluation points for each parametric dimension.
           The tuple has length `NPa` (dimension of parametric space).
       
@@ -303,24 +303,24 @@ See Also
 
   >>> linspace_for_integration(
     self,
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
-    bounding_box: Optional[Iterable] = None
-) -> tuple[tuple[numpy.ndarray[numpy.floating], ...], tuple[numpy.ndarray[numpy.floating], ...]]
+    n_eval_per_elem: Union[int, Sequence[int], numpy.ndarray[Any, numpy.dtype[numpy.integer]]] = 10,
+    bounding_box: Optional[Sequence] = None
+) -> tuple[tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], ...], tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], ...]]
       Generate sets of evaluation points and their integration weights over each basis span.
       
       This method creates evenly spaced points and their corresponding integration weights
       for each parametric dimension by calling `linspace_for_integration` on each
-      `BSplineBasis` instance stored in the `bases` array.
+      `BSplineBasis` instance stored in the `bases` list.
       
       Parameters
       ----------
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
-          If an `Iterable` is provided, each value corresponds to a different dimension.
+          If an `Sequence` is provided, each value corresponds to a different dimension.
           By default, 10.
       
-      bounding_box : Union[Iterable[tuple[float, float]], None], optional
+      bounding_box : Union[Sequence[tuple[float, float]], None], optional
           Lower and upper bounds for each parametric dimension.
           If `None`, uses the span of each basis.
           Format: [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), ...].
@@ -328,11 +328,11 @@ See Also
       
       Returns
       -------
-      XI : tuple[np.ndarray[np.floating], ...]
+      XI : tuple[NDArray[np.floating], ...]
           Tuple containing arrays of evaluation points for each parametric dimension.
           The tuple has length `NPa` (dimension of parametric space).
       
-      dXI : tuple[np.ndarray[np.floating], ...]
+      dXI : tuple[NDArray[np.floating], ...]
           Tuple containing arrays of integration weights for each parametric dimension.
           The tuple has length `NPa` (dimension of parametric space).
       
@@ -359,26 +359,26 @@ See Also
 
   >>> gauss_legendre_for_integration(
     self,
-    n_eval_per_elem: Union[int, Iterable[int], NoneType] = None,
-    bounding_box: Optional[Iterable] = None
-) -> tuple[tuple[numpy.ndarray[numpy.floating], ...], tuple[numpy.ndarray[numpy.floating], ...]]
+    n_eval_per_elem: Union[int, Sequence[int], numpy.ndarray[Any, numpy.dtype[numpy.integer]], NoneType] = None,
+    bounding_box: Optional[Sequence[tuple[float, float]]] = None
+) -> tuple[tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], ...], tuple[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]], ...]]
       Generate sets of evaluation points and their Gauss-Legendre integration weights over each basis span.
       
       This method creates Gauss-Legendre quadrature points and their corresponding integration weights
       for each parametric dimension by calling `gauss_legendre_for_integration` on each
-      `BSplineBasis` instance stored in the `bases` array.
+      `BSplineBasis` instance stored in the `bases` list.
       
       Parameters
       ----------
-      n_eval_per_elem : Union[int, Iterable[int], None], optional
+      n_eval_per_elem : Union[int, Sequence[int], None], optional
           Number of evaluation points per element for each parametric dimension.
           If an `int` is provided, the same number is used for all dimensions.
-          If an `Iterable` is provided, each value corresponds to a different dimension.
+          If an `Sequence` is provided, each value corresponds to a different dimension.
           If `None`, uses `p//2 + 1` points per element where `p` is the degree of each basis.
           This number of points ensures an exact integration of a `p`-th degree polynomial.
           By default, None.
       
-      bounding_box : Union[Iterable[tuple[float, float]], None], optional
+      bounding_box : Union[Sequence[tuple[float, float]], None], optional
           Lower and upper bounds for each parametric dimension.
           If `None`, uses the span of each basis.
           Format: [(`xi_min`, `xi_max`), (`eta_min`, `eta_max`), ...].
@@ -386,11 +386,11 @@ See Also
       
       Returns
       -------
-      XI : tuple[np.ndarray[np.floating], ...]
+      XI : tuple[NDArray[np.floating], ...]
           Tuple containing arrays of Gauss-Legendre points for each parametric dimension.
           The tuple has length `NPa` (dimension of parametric space).
       
-      dXI : tuple[np.ndarray[np.floating], ...]
+      dXI : tuple[NDArray[np.floating], ...]
           Tuple containing arrays of Gauss-Legendre weights for each parametric dimension.
           The tuple has length `NPa` (dimension of parametric space).
       
@@ -420,7 +420,7 @@ See Also
       Maps all knot vectors to the interval [0, 1] in each parametric dimension.
       
       This method normalizes the knot vectors of each `BSplineBasis` instance stored
-      in the `bases` array by applying an affine transformation that maps the span
+      in the `bases` list by applying an affine transformation that maps the span
       interval to [0, 1].
       
       Notes
@@ -446,9 +446,9 @@ See Also
 
   >>> DN(
     self,
-    XI: Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], ...]],
-    k: Union[int, Iterable[int]] = 0
-) -> Union[scipy.sparse._matrix.spmatrix, numpy.ndarray[scipy.sparse._matrix.spmatrix]]
+    XI: Union[numpy.ndarray[Any, numpy.dtype[numpy.floating]], Sequence[numpy.ndarray[Any, numpy.dtype[numpy.floating]]]],
+    k: Union[int, Sequence[int]] = 0
+) -> Union[scipy.sparse._matrix.spmatrix, numpy.ndarray[Any, numpy.dtype[numpy.object_]]]
       Compute the `k`-th derivative of the B-spline basis at given points in the parametric space.
       
       This method evaluates the basis functions or their derivatives at specified points, returning
@@ -456,16 +456,16 @@ See Also
       
       Parameters
       ----------
-      XI : Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]]
+      XI : Union[NDArray[np.floating], Sequence[NDArray[np.floating]]]
           Points in the parametric space where to evaluate the basis functions.
           Two input formats are accepted:
           1. `numpy.ndarray`: Array of coordinates with shape (`NPa`, n_points).
           Each column represents one evaluation point [`xi`, `eta`, ...].
           The resulting matrices will have shape (n_points, number of functions).
-          2. `tuple`: Contains `NPa` arrays of coordinates (`xi`, `eta`, ...).
+          2. `Sequence`: Contains `NPa` arrays of coordinates (`xi`, `eta`, ...).
           The resulting matrices will have (n_xi × n_eta × ...) rows.
       
-      k : Union[int, Iterable[int]], optional
+      k : Union[int, Sequence[int]], optional
           Derivative orders to compute. Two formats are accepted:
           1. `int`: Same derivative order along all axes. Common values:
           - `k=0`: Evaluate basis functions (default)
@@ -477,7 +477,7 @@ See Also
       
       Returns
       -------
-      DN : Union[sps.spmatrix, np.ndarray[sps.spmatrix]]
+      DN : Union[sps.spmatrix, NDArray[sps.spmatrix]]
           Sparse matrix or array of sparse matrices containing the basis evaluations:
           - If `k` is a `list` or is 0: Returns a single sparse matrix containing the mixed
           derivative specified by the list.
@@ -537,10 +537,10 @@ See Also
 
   >>> __call__(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    XI: Union[numpy.ndarray[numpy.floating], tuple[numpy.ndarray[numpy.floating], ...]],
-    k: Union[int, Iterable[int]] = 0
-) -> numpy.ndarray[numpy.floating]
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    XI: Union[numpy.ndarray[Any, numpy.dtype[numpy.floating]], Sequence[numpy.ndarray[Any, numpy.dtype[numpy.floating]]]],
+    k: Union[int, Sequence[int]] = 0
+) -> numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]
       Evaluate the `k`-th derivative of the B-spline at given points in the parametric space.
       
       This method evaluates the B-spline or its derivatives at specified points by computing
@@ -548,21 +548,21 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
           - ni is the number of control points in the i-th parametric dimension,
           i.e. the number of basis functions on this parametric axis
       
-      XI : Union[np.ndarray[np.floating], tuple[np.ndarray[np.floating], ...]]
+      XI : Union[NDArray[np.floating], Sequence[NDArray[np.floating]]]
           Points in the parametric space where to evaluate the B-spline.
           Two input formats are accepted:
           1. `numpy.ndarray`: Array of coordinates with shape (`NPa`, n_points).
           Each column represents one evaluation point [`xi`, `eta`, ...].
-          2. `tuple`: Contains `NPa` arrays of coordinates (`xi`, `eta`, ...).
+          2. `Sequence`: Contains `NPa` arrays of coordinates (`xi`, `eta`, ...).
       
-      k : Union[int, Iterable[int]], optional
+      k : Union[int, Sequence[int]], optional
           Derivative orders to compute. Two formats are accepted:
           1. `int`: Same derivative order along all axes. Common values:
           - `k=0`: Evaluate the B-spline mapping (default)
@@ -574,7 +574,7 @@ See Also
       
       Returns
       -------
-      values : np.ndarray[np.floating]
+      values : NDArray[np.floating]
           B-spline evaluation at the specified points.
           Shape depends on input format and derivative order:
           - For array input: (`NPh`, shape of derivative, n_points)
@@ -623,9 +623,9 @@ See Also
 
   >>> knotInsertion(
     self,
-    ctrl_pts: Optional[numpy.ndarray[numpy.floating]],
-    knots_to_add: Iterable[Union[numpy.ndarray[numpy.float64], int]]
-) -> numpy.ndarray[numpy.floating]
+    ctrl_pts: Optional[numpy.ndarray[Any, numpy.dtype[numpy.floating]]],
+    knots_to_add: Sequence[typing.Union[numpy.ndarray[typing.Any, numpy.dtype[numpy.float64]], int]]
+) -> Optional[numpy.ndarray[Any, numpy.dtype[numpy.floating]]]
       Add knots to the B-spline while preserving its geometry.
       
       This method performs knot insertion by adding new knots to each parametric dimension
@@ -634,7 +634,7 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
@@ -642,7 +642,7 @@ See Also
           If None is passed, the knot insertion is performed on the basis functions
           but not on the control points.
       
-      knots_to_add : Iterable[Union[np.ndarray[np.floating], int]]
+      knots_to_add : Sequence[Union[NDArray[np.floating], int]]
           Refinement specification for each parametric dimension.
           For each dimension, two formats are accepted:
           1. `numpy.ndarray`: Array of knots to insert. These knots must lie within
@@ -651,10 +651,11 @@ See Also
       
       Returns
       -------
-      new_ctrl_pts : np.ndarray[np.floating]
+      new_ctrl_pts : Union[NDArray[np.floating], None]
           New control points after knot insertion.
           Shape: (`NPh`, m1, m2, ...) where mi ≥ ni is the new number of
           control points in the i-th parametric dimension.
+          Returns `None` if `ctrl_pts` is `None`.
       
       Notes
       -----
@@ -692,9 +693,9 @@ See Also
 
   >>> orderElevation(
     self,
-    ctrl_pts: Optional[numpy.ndarray[numpy.floating]],
-    t: Iterable[int]
-) -> numpy.ndarray[numpy.floating]
+    ctrl_pts: Optional[numpy.ndarray[Any, numpy.dtype[numpy.floating]]],
+    t: Sequence[int]
+) -> Optional[numpy.ndarray[Any, numpy.dtype[numpy.floating]]]
       Elevate the polynomial degree of the B-spline while preserving its geometry.
       
       This method performs order elevation by increasing the polynomial degree of each
@@ -704,7 +705,7 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : Union[np.ndarray[np.floating], None]
+      ctrl_pts : Union[NDArray[np.floating], None]
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
@@ -712,17 +713,18 @@ See Also
           If None is passed, the order elevation is performed on the basis functions
           but not on the control points.
       
-      t : Iterable[int]
+      t : Sequence[int]
           Degree elevation for each parametric dimension.
           For each dimension i, the new degree will be `p_i + t_i` where `p_i`
           is the current degree.
       
       Returns
       -------
-      new_ctrl_pts : np.ndarray[np.floating]
+      new_ctrl_pts : Union[NDArray[np.floating], None]
           New control points after order elevation.
           Shape: (`NPh`, m1, m2, ...) where mi ≥ ni is the new number of
           control points in the i-th parametric dimension.
+          Returns `None` if `ctrl_pts` is `None`.
       
       Notes
       -----
@@ -752,7 +754,7 @@ See Also
   >>> greville_abscissa(
     self,
     return_weights: bool = False
-) -> Union[list[numpy.ndarray[numpy.floating]], tuple[list[numpy.ndarray[numpy.floating]], list[numpy.ndarray[numpy.floating]]]]
+) -> Union[list[numpy.ndarray[Any, numpy.dtype[numpy.floating]]], tuple[list[numpy.ndarray[Any, numpy.dtype[numpy.floating]]], list[numpy.ndarray[Any, numpy.dtype[numpy.floating]]]]]
       Compute the Greville abscissa and optionally their weights for each parametric dimension.
       
       The Greville abscissa can be interpreted as the "position" of the control points in the
@@ -766,12 +768,12 @@ See Also
       
       Returns
       -------
-      greville : list[np.ndarray[np.floating]]
+      greville : list[NDArray[np.floating]]
           List containing the Greville abscissa for each parametric dimension.
           The list has length `NPa`, where each element is an array of size `n + 1`,
           `n` being the last index of the basis functions in that dimension.
       
-      weights : list[np.ndarray[np.floating]], optional
+      weights : list[NDArray[np.floating]], optional
           Only returned if `return_weights` is `True`.
           List containing the weights for each parametric dimension.
           The list has length `NPa`, where each element is an array containing
@@ -806,11 +808,11 @@ See Also
 
   >>> make_control_poly_meshes(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     n_step: int = 1,
     fields: dict = {},
-    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None,
+    XI: Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]] = None,
     paraview_sizes: dict = {}
 ) -> list[meshio._mesh.Mesh]
       Create meshes containing all the data needed to plot the control polygon of the B-spline.
@@ -821,30 +823,30 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Array of control points of the B-spline, with shape
           (`NPh`, number of elements for dim 1, ..., number of elements for dim `NPa`),
           where `NPh` is the physical space dimension and `NPa` is the dimension of the
           parametric space.
       n_step : int, optional
           Number of time steps to plot. By default, 1.
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
-          - If an `Iterable` is provided, each value corresponds to a different dimension.
+          - If an `Sequence` is provided, each value corresponds to a different dimension.
       n_step : int, optional
           Number of time steps to plot. By default, 1.
       fields : dict, optional
           Dictionary of fields to plot at each time step. Keys are field names. Values can be:
-          - a `function` taking (`BSpline` spline, `tuple` of `np.ndarray[np.floating]` XI) and
-          returning a `np.ndarray[np.floating]` of shape (`n_step`, number of combinations of XI, field size),
-          - a `np.ndarray[np.floating]` defined **on the control points**, of shape (`n_step`, field size, *`ctrl_pts.shape[1:]`),
+          - a `function` taking (`BSpline` spline, `tuple` of `NDArray[np.floating]` XI) and
+          returning a `NDArray[np.floating]` of shape (`n_step`, number of combinations of XI, field size),
+          - a `NDArray[np.floating]` defined **on the control points**, of shape (`n_step`, field size, *`ctrl_pts.shape[1:]`),
           which is then interpolated using the B-spline basis functions,
-          - a `np.ndarray[np.floating]` defined **on the evaluation grid**, of shape (`n_step`, field size, *grid shape),
+          - a `NDArray[np.floating]` defined **on the evaluation grid**, of shape (`n_step`, field size, *grid shape),
           where `grid shape` matches the discretization provided by XI or `n_eval_per_elem`.
           In this case, the field is interpolated in physical space using `scipy.interpolate.griddata`.
-      XI : tuple[np.ndarray[np.floating], ...], optional
+      XI : tuple[NDArray[np.floating], ...], optional
           Parametric coordinates at which to evaluate the B-spline and fields.
           If not `None`, overrides the `n_eval_per_elem` parameter.
           If `None`, a regular grid is generated according to `n_eval_per_elem`.
@@ -879,11 +881,11 @@ See Also
 
   >>> make_elem_separator_meshes(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    n_eval_per_elem: Union[int, Sequence[int], numpy.ndarray[Any, numpy.dtype[numpy.integer]]] = 10,
     n_step: int = 1,
     fields: dict = {},
-    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None,
+    XI: Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]] = None,
     paraview_sizes: dict = {}
 ) -> list[meshio._mesh.Mesh]
       Create meshes representing the boundaries of every element in the B-spline for visualization.
@@ -894,28 +896,28 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Array of control points of the B-spline, with shape
           (`NPh`, number of elements for dim 1, ..., number of elements for dim `NPa`),
           where `NPh` is the physical space dimension and `NPa` is the dimension of the
           parametric space.
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
-          - If an `Iterable` is provided, each value corresponds to a different dimension.
+          - If an `Sequence` is provided, each value corresponds to a different dimension.
       n_step : int, optional
           Number of time steps to plot. By default, 1.
       fields : dict, optional
           Dictionary of fields to plot at each time step. Keys are field names. Values can be:
-          - a `function` taking (`BSpline` spline, `tuple` of `np.ndarray[np.floating]` XI) and
-          returning a `np.ndarray[np.floating]` of shape (`n_step`, number of combinations of XI, field size),
-          - a `np.ndarray[np.floating]` defined **on the control points**, of shape (`n_step`, field size, *`ctrl_pts.shape[1:]`),
+          - a `function` taking (`BSpline` spline, `tuple` of `NDArray[np.floating]` XI) and
+          returning a `NDArray[np.floating]` of shape (`n_step`, number of combinations of XI, field size),
+          - a `NDArray[np.floating]` defined **on the control points**, of shape (`n_step`, field size, *`ctrl_pts.shape[1:]`),
           which is then interpolated using the B-spline basis functions,
-          - a `np.ndarray[np.floating]` defined **on the evaluation grid**, of shape (`n_step`, field size, *grid shape),
+          - a `NDArray[np.floating]` defined **on the evaluation grid**, of shape (`n_step`, field size, *grid shape),
           where `grid shape` matches the discretization provided by XI or `n_eval_per_elem`.
           In this case, the field is interpolated in physical space using `scipy.interpolate.griddata`.
-      XI : tuple[np.ndarray[np.floating], ...], optional
+      XI : tuple[NDArray[np.floating], ...], optional
           Parametric coordinates at which to evaluate the B-spline and fields.
           If not `None`, overrides the `n_eval_per_elem` parameter.
           If `None`, a regular grid is generated according to `n_eval_per_elem`.
@@ -953,11 +955,11 @@ See Also
 
   >>> make_elements_interior_meshes(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     n_step: int = 1,
     fields: dict = {},
-    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None
+    XI: Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]] = None
 ) -> list[meshio._mesh.Mesh]
       Create meshes representing the interior of each element in the B-spline.
       
@@ -967,28 +969,28 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Array of control points of the B-spline, with shape
           (`NPh`, number of points for dim 1, ..., number of points for dim `NPa`),
           where `NPh` is the physical space dimension and `NPa` is the dimension of
           the parametric space.
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
-          - If an `Iterable` is provided, each value corresponds to a different dimension.
+          - If an `Sequence` is provided, each value corresponds to a different dimension.
       n_step : int, optional
           Number of time steps to plot. By default, 1.
       fields : dict, optional
           Dictionary of fields to plot at each time step. Keys are field names. Values can be:
-          - a `function` taking (`BSpline` spline, `tuple` of `np.ndarray[np.floating]` XI) and
-          returning a `np.ndarray[np.floating]` of shape (`n_step`, number of combinations of XI, field size),
-          - a `np.ndarray[np.floating]` defined **on the control points**, of shape (`n_step`, field size, *`ctrl_pts.shape[1:]`),
+          - a `function` taking (`BSpline` spline, `tuple` of `NDArray[np.floating]` XI) and
+          returning a `NDArray[np.floating]` of shape (`n_step`, number of combinations of XI, field size),
+          - a `NDArray[np.floating]` defined **on the control points**, of shape (`n_step`, field size, *`ctrl_pts.shape[1:]`),
           in which case it is interpolated using the B-spline basis functions,
-          - a `np.ndarray[np.floating]` defined **directly on the evaluation grid**, of shape (`n_step`, field size, *grid shape),
+          - a `NDArray[np.floating]` defined **directly on the evaluation grid**, of shape (`n_step`, field size, *grid shape),
           where `grid shape` is the shape of the discretization XI (i.e., number of points along each parametric axis).
           By default, `{}` (no fields).
-      XI : tuple[np.ndarray[np.floating], ...], optional
+      XI : tuple[NDArray[np.floating], ...], optional
           Parametric coordinates at which to evaluate the B-spline and fields.
           If not `None`, overrides the `n_eval_per_elem` parameter.
           If `None`, a regular grid is generated according to `n_eval_per_elem`.
@@ -1030,13 +1032,13 @@ See Also
 
   >>> saveParaview(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
     path: str,
     name: str,
     n_step: int = 1,
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     fields: Optional[dict] = None,
-    XI: Optional[tuple[numpy.ndarray[numpy.floating], ...]] = None,
+    XI: Optional[tuple[numpy.ndarray[Any, numpy.dtype[numpy.floating]], ...]] = None,
     groups: Optional[dict[str, dict[str, Union[str, int]]]] = None,
     make_pvd: bool = True,
     verbose: bool = True,
@@ -1053,7 +1055,7 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Control points defining the B-spline geometry.
           Shape: (`NPh`, n1, n2, ...) where:
           - `NPh` is the dimension of the physical space
@@ -1068,11 +1070,11 @@ See Also
       n_step : int, optional
           Number of time steps to save. By default, 1.
       
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for each parametric dimension.
           By default, 10.
           - If an `int` is provided, the same number is used for all dimensions.
-          - If an `Iterable` is provided, each value corresponds to a different dimension.
+          - If an `Sequence` is provided, each value corresponds to a different dimension.
       
       fields : Union[dict, None], optional
           Fields to visualize at each time step. Dictionary format:
@@ -1091,9 +1093,9 @@ See Also
           - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
           - `*grid_shape`: Shape of the evaluation grid (number of points along each parametric axis)
       
-          3. A function that computes field values (`np.ndarray[np.floating]`) at given
+          3. A function that computes field values (`NDArray[np.floating]`) at given
           points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
-          points for each dimension (`tuple[np.ndarray[np.floating], ...]`).
+          points for each dimension (`tuple[NDArray[np.floating], ...]`).
           The result should be an array of shape (`n_step`, `n_points`, `field_size`) where:
           - `n_step`: Number of time steps
           - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
@@ -1101,7 +1103,7 @@ See Also
       
           By default, None.
       
-      XI : tuple[np.ndarray[np.floating], ...], optional
+      XI : tuple[NDArray[np.floating], ...], optional
           Parametric coordinates at which to evaluate the B-spline and fields.
           If not `None`, overrides the `n_eval_per_elem` parameter.
           If `None`, a regular grid is generated according to `n_eval_per_elem`.
@@ -1176,7 +1178,11 @@ See Also
   >>> from_dict(cls, data: dict) -> bsplyne.b_spline.BSpline
       Creates a BSpline object from a dictionary representation.
 
-  >>> save(self, filepath: str, ctrl_pts: Optional[numpy.ndarray] = None) -> None
+  >>> save(
+    self,
+    filepath: str,
+    ctrl_pts: Optional[numpy.ndarray[Any, numpy.dtype[+_ScalarType_co]]] = None
+) -> None
       Save the BSpline object to a file.
       Control points are optional.
       Supported extensions: json, pkl
@@ -1184,15 +1190,15 @@ See Also
   >>> load(
     cls,
     filepath: str
-) -> Union[bsplyne.b_spline.BSpline, tuple[bsplyne.b_spline.BSpline, numpy.ndarray]]
+) -> Union[bsplyne.b_spline.BSpline, tuple[bsplyne.b_spline.BSpline, numpy.ndarray[Any, numpy.dtype[+_ScalarType_co]]]]
       Load a BSpline object from a file.
       May return control points if the file contains them.
       Supported extensions: json, pkl
 
   >>> plot(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     plotter: Union[matplotlib.axes._axes.Axes, pyvista.plotting.plotter.Plotter, NoneType] = None,
     ctrl_color: str = '#d95f02',
     interior_color: str = '#666666',
@@ -1209,21 +1215,21 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Control points defining the B-spline geometry.
           Shape: (NPh, n1, n2, ...) where:
           - NPh is the dimension of the physical space (2 or 3)
           - ni is the number of control points in the i-th parametric dimension
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for visualizing the B-spline.
           Can be specified as:
           - Single integer: Same number for all dimensions
-          - Iterable of integers: Different numbers for each dimension
+          - Sequence of integers: Different numbers for each dimension
           By default, 10.
-      plotter : Union[mpl.axes.Axes, 'pv.Plotter', None], optional
+      plotter : Union[Axes, 'pv.Plotter', None], optional
           Plotter object for the visualization:
           - If PyVista is available: Can be a `pv.Plotter` instance
-          - If only Matplotlib is available: Can be a `mpl.axes.Axes` instance
+          - If only Matplotlib is available: Can be a `Axes` instance
           - If None, creates a new plotter/axes.
           Default is None.
       ctrl_color : str, optional
@@ -1247,7 +1253,7 @@ See Also
       
       Returns
       -------
-      plotter : Union[mpl.axes.Axes, 'pv.Plotter', None]
+      plotter : Union[Axes, 'pv.Plotter', None]
           The plotter object used for visualization (Matplotlib axes or PyVista plotter)
           if `show` is False. Otherwise, returns None.
       
@@ -1277,8 +1283,8 @@ See Also
 
   >>> plotMPL(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     ax: Optional[matplotlib.axes._axes.Axes] = None,
     ctrl_color: str = '#1b9e77',
     interior_color: str = '#7570b3',
@@ -1295,20 +1301,20 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Control points defining the B-spline geometry.
           Shape: (NPh, n1, n2, ...) where:
           - NPh is the dimension of the physical space (2 or 3)
           - ni is the number of control points in the i-th parametric dimension
       
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for visualizing the B-spline.
           Can be specified as:
           - Single integer: Same number for all dimensions
-          - Iterable of integers: Different numbers for each dimension
+          - Sequence of integers: Different numbers for each dimension
           By default, 10.
       
-      ax : Union[mpl.axes.Axes, None], optional
+      ax : Union[Axes, None], optional
           Matplotlib axes for plotting. If None, creates a new figure and axes.
           For 3D visualizations, must be a 3D axes if provided (created with
           `projection='3d'`).
@@ -1349,7 +1355,7 @@ See Also
       
       Returns
       -------
-      ax : Union[mpl.axes.Axes, None]
+      ax : Union[Axes, None]
           Matplotlib axes for the plot if show is deactivated, otherwise None.
       
       Notes
@@ -1395,8 +1401,8 @@ See Also
 
   >>> plotPV(
     self,
-    ctrl_pts: numpy.ndarray[numpy.floating],
-    n_eval_per_elem: Union[int, Iterable[int]] = 10,
+    ctrl_pts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    n_eval_per_elem: Union[int, Sequence[int]] = 10,
     pv_plotter: Optional[pyvista.plotting.plotter.Plotter] = None,
     ctrl_color: str = '#d95f02',
     interior_color: str = '#666666',
@@ -1412,17 +1418,17 @@ See Also
       
       Parameters
       ----------
-      ctrl_pts : np.ndarray[np.floating]
+      ctrl_pts : NDArray[np.floating]
           Control points defining the B-spline geometry.
           Shape: (NPh, n1, n2, ...) where:
           - NPh is the dimension of the physical space (2 or 3)
           - ni is the number of control points in the i-th parametric dimension
           If NPh=2, control points are automatically converted to 3D for plotting.
-      n_eval_per_elem : Union[int, Iterable[int]], optional
+      n_eval_per_elem : Union[int, Sequence[int]], optional
           Number of evaluation points per element for visualizing the B-spline.
           Can be specified as:
           - Single integer: Same number for all dimensions
-          - Iterable of integers: Different numbers for each dimension
+          - Sequence of integers: Different numbers for each dimension
           By default, 10.
       pv_plotter : Union['pv.Plotter', None], optional
           PyVista plotter for visualization. If None, creates a new plotter.

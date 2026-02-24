@@ -1,9 +1,11 @@
 # %%
+from collections.abc import Sequence
 import os
 from itertools import permutations
-from typing import Iterable, Union, Literal
+from typing import Union, Literal, Any
 
 import numpy as np
+from numpy.typing import NDArray
 import numba as nb
 import meshio as io
 from scipy.spatial import cKDTree
@@ -18,16 +20,14 @@ from .parallel_utils import parallel_blocks
 
 # union-find algorithm for connectivity
 @nb.njit(nb.int32(nb.int32[:], nb.int32), cache=True)
-def _find(parent: np.ndarray[np.integer], x: int) -> int:
+def _find(parent: NDArray[np.integer], x: int) -> int:
     if parent[x] != x:
         parent[x] = _find(parent, parent[x])
     return parent[x]
 
 
 @nb.njit(nb.void(nb.int32[:], nb.int32[:], nb.int32, nb.int32), cache=True)
-def _union(
-    parent: np.ndarray[np.integer], rank: np.ndarray[np.integer], x: int, y: int
-):
+def _union(parent: NDArray[np.integer], rank: NDArray[np.integer], x: int, y: int):
     rootX = _find(parent, x)
     rootY = _find(parent, y)
     if rootX != rootY:
@@ -42,8 +42,8 @@ def _union(
 
 @nb.njit(nb.int32[:](nb.int32[:, :], nb.int64), cache=True)
 def _get_unique_nodes_inds(
-    nodes_couples: np.ndarray[np.integer], nb_nodes: int
-) -> np.ndarray[np.integer]:
+    nodes_couples: NDArray[np.integer], nb_nodes: np.int64
+) -> NDArray[np.integer]:
     parent = np.arange(nb_nodes, dtype=np.int32)
     rank = np.zeros(nb_nodes, dtype=np.int32)
     for a, b in nodes_couples:
@@ -66,9 +66,9 @@ class MultiPatchBSplineConnectivity:
 
     Attributes
     ----------
-    unique_nodes_inds : np.ndarray[np.integer]
+    unique_nodes_inds : NDArray[np.integer]
         The indices of the unique representation needed to create the unpacked one.
-    shape_by_patch : np.ndarray[np.integer]
+    shape_by_patch : NDArray[np.integer]
         The shape of the separated nodes by patch.
     nb_nodes : int
         The total number of unpacked nodes.
@@ -80,8 +80,8 @@ class MultiPatchBSplineConnectivity:
         The dimension of the parametric space of the B-splines.
     """
 
-    unique_nodes_inds: np.ndarray
-    shape_by_patch: np.ndarray
+    unique_nodes_inds: NDArray[np.integer]
+    shape_by_patch: NDArray[np.integer]
     nb_nodes: int
     nb_unique_nodes: int
     nb_patchs: int
@@ -89,17 +89,17 @@ class MultiPatchBSplineConnectivity:
 
     def __init__(
         self,
-        unique_nodes_inds: np.ndarray[np.integer],
-        shape_by_patch: np.ndarray[np.integer],
+        unique_nodes_inds: NDArray[np.integer],
+        shape_by_patch: NDArray[np.integer],
         nb_unique_nodes: int,
     ):
         """
 
         Parameters
         ----------
-        unique_nodes_inds : np.ndarray[np.integer]
+        unique_nodes_inds : NDArray[np.integer]
             The indices of the unique representation needed to create the unpacked one.
-        shape_by_patch : np.ndarray[np.integer]
+        shape_by_patch : NDArray[np.integer]
             The shape of the separated nodes by patch.
         nb_unique_nodes : int
             The total number of unique nodes.
@@ -113,18 +113,18 @@ class MultiPatchBSplineConnectivity:
     @classmethod
     def from_nodes_couples(
         cls,
-        nodes_couples: np.ndarray[np.integer],
-        shape_by_patch: np.ndarray[np.integer],
+        nodes_couples: NDArray[np.integer],
+        shape_by_patch: NDArray[np.integer],
     ) -> "MultiPatchBSplineConnectivity":
         """
         Create the connectivity from a list of couples of unpacked nodes.
 
         Parameters
         ----------
-        nodes_couples : np.ndarray[np.integer]
+        nodes_couples : NDArray[np.integer]
             Couples of indices of unpacked nodes that are considered the same.
             Its shape should be (# of couples, 2)
-        shape_by_patch : np.ndarray[np.integer]
+        shape_by_patch : NDArray[np.integer]
             The shape of the separated nodes by patch.
 
         Returns
@@ -148,29 +148,53 @@ class MultiPatchBSplineConnectivity:
     @classmethod
     def from_separated_ctrlPts(
         cls,
-        separated_ctrlPts: np.ndarray[np.floating],
+        separated_ctrlPts: NDArray[np.floating],
         eps: float = 1e-10,
         return_nodes_couples: bool = False,
-    ) -> "MultiPatchBSplineConnectivity":
+    ) -> Union[
+        "MultiPatchBSplineConnectivity",
+        tuple["MultiPatchBSplineConnectivity", NDArray[np.integer]],
+    ]:
         """
-        Create the connectivity from a list of control points given as
-        a separated field by comparing every couple of points.
+        Construct a multi-patch connectivity from separated control points.
+
+        This method compares control points from each patch to identify
+        nodes that are coincident (within a tolerance `eps`) and builds
+        the connectivity information needed to link multiple B-spline patches.
 
         Parameters
         ----------
-        separated_ctrlPts : list of np.ndarray[np.floating]
-            Control points of every patch to be compared in the separated
-            representation. Every array is of shape :
-            (``NPh``, nb elem for dim 1, ..., nb elem for dim ``npa``)
+        separated_ctrlPts : list of NDArray[np.floating]
+            Control points of each patch in a separated representation.
+            Each array has shape (`NPh`, nb_elem_dim1, ..., nb_elem_dimN), where
+            `NPh` is the number of physical dimensions, and nb_elem_dim* is the
+            number of control points along that dimension.
         eps : float, optional
-            Maximum distance between two points to be considered the same, by default 1e-10
+            Maximum distance between two points to be considered identical.
+            Default is 1e-10.
         return_nodes_couples : bool, optional
-            If `True`, returns the `nodes_couples` created, by default False
+            If `True`, also return the list of node index pairs (`nodes_couples`)
+            that were matched across patches. Default is `False`.
 
         Returns
         -------
         MultiPatchBSplineConnectivity
-            Instance of `MultiPatchBSplineConnectivity` created.
+            A new instance of `MultiPatchBSplineConnectivity` with connectivity
+            information built from the provided control points.
+        tuple[MultiPatchBSplineConnectivity, NDArray[np.integer]], optional
+            If `return_nodes_couples` is True, also return the `nodes_couples`
+            array of shape `(n_pairs, 2)` indicating indices of coincident nodes.
+
+        Notes
+        -----
+        - Uses a KD-tree (`scipy.spatial.cKDTree`) to efficiently detect
+        coincident nodes across patches.
+        - The method assumes all patches have the same number of physical
+        dimensions (`NPh`).
+        - The returned `nodes_couples` array contains pairs of node indices
+        across different patches that are within the tolerance `eps`.
+        - This method replaces an older pairwise distance comparison
+        implementation with a more efficient KD-tree approach.
         """
         NPh = separated_ctrlPts[0].shape[0]
         assert np.all(
@@ -182,7 +206,7 @@ class MultiPatchBSplineConnectivity:
 
         ctrlPts = np.hstack([pts.reshape((NPh, -1)) for pts in separated_ctrlPts])
         tree = cKDTree(ctrlPts.T)
-        matches = tree.query_ball_tree(tree, r=eps)
+        matches = tree.query_ball_tree(tree, r=eps, p=2.0)
         connex = set()
         for match in matches:
             if len(match) > 1:
@@ -227,19 +251,19 @@ class MultiPatchBSplineConnectivity:
         else:
             return cls.from_nodes_couples(nodes_couples, shape_by_patch)
 
-    def unpack(self, unique_field: np.ndarray) -> np.ndarray:
+    def unpack(self, unique_field: NDArray) -> NDArray:
         """
         Extract the unpacked representation from a unique representation.
 
         Parameters
         ----------
-        unique_field : np.ndarray
+        unique_field : NDArray
             The unique representation. Its shape should be :
             (field, shape, ..., `self`.`nb_unique_nodes`)
 
         Returns
         -------
-        unpacked_field : np.ndarray
+        unpacked_field : NDArray
             The unpacked representation. Its shape is :
             (field, shape, ..., `self`.`nb_nodes`)
         """
@@ -248,15 +272,15 @@ class MultiPatchBSplineConnectivity:
 
     def pack(
         self,
-        unpacked_field: np.ndarray,
+        unpacked_field: NDArray,
         method: Literal["last", "first", "mean"] = "mean",
-    ) -> np.ndarray:
+    ) -> NDArray:
         """
         Extract the unique representation from an unpacked representation.
 
         Parameters
         ----------
-        unpacked_field : np.ndarray
+        unpacked_field : NDArray
             The unpacked representation. Its shape should be :
             (field, shape, ..., `self`.`nb_nodes`)
         method: str
@@ -267,7 +291,7 @@ class MultiPatchBSplineConnectivity:
 
         Returns
         -------
-        unique_nodes : np.ndarray
+        unique_nodes : NDArray
             The unique representation. Its shape is :
             (field, shape, ..., `self`.`nb_unique_nodes`)
         """
@@ -293,19 +317,19 @@ class MultiPatchBSplineConnectivity:
             )
         return unique_field
 
-    def separate(self, unpacked_field: np.ndarray) -> list[np.ndarray]:
+    def separate(self, unpacked_field: NDArray) -> list[NDArray]:
         """
         Extract the separated representation from an unpacked representation.
 
         Parameters
         ----------
-        unpacked_field : np.ndarray
+        unpacked_field : NDArray
             The unpacked representation. Its shape is :
             (field, shape, ..., `self`.`nb_nodes`)
 
         Returns
         -------
-        separated_field : list of np.ndarray
+        separated_field : list of NDArray
             The separated representation. Every array is of shape :
             (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
         """
@@ -320,19 +344,19 @@ class MultiPatchBSplineConnectivity:
             ind = next_ind
         return separated_field
 
-    def agglomerate(self, separated_field: list[np.ndarray]) -> np.ndarray:
+    def agglomerate(self, separated_field: Sequence[NDArray]) -> NDArray:
         """
         Extract the unpacked representation from a separated representation.
 
         Parameters
         ----------
-        separated_field : list of np.ndarray
+        separated_field : Sequence of NDArray
             The separated representation. Every array is of shape :
             (field, shape, ..., nb elem for dim 1, ..., nb elem for dim `npa`)
 
         Returns
         -------
-        unpacked_field : np.ndarray
+        unpacked_field : NDArray
             The unpacked representation. Its shape is :
             (field, shape, ..., `self`.`nb_nodes`)
         """
@@ -349,7 +373,7 @@ class MultiPatchBSplineConnectivity:
         self,
         field_shape: tuple[int, ...],
         representation: Literal["unique", "unpacked", "separated"] = "separated",
-    ) -> Union[np.ndarray[np.integer], list[np.ndarray[np.integer]]]:
+    ) -> Union[NDArray[np.integer], list[NDArray[np.integer]]]:
         """
         Get the unique, unpacked or separated representation of a field's unique indices.
 
@@ -364,7 +388,7 @@ class MultiPatchBSplineConnectivity:
 
         Returns
         -------
-        unique_field_indices : np.ndarray[np.integer] or list of np.ndarray[np.integer]
+        unique_field_indices : NDArray[np.integer] or list of NDArray[np.integer]
             The unique, unpacked or separated representation of a field's unique indices.
             If unique, its shape is (*`field_shape`, `self`.`nb_unique_nodes`).
             If unpacked, its shape is : (*`field_shape`, `self`.`nb_nodes`).
@@ -390,13 +414,13 @@ class MultiPatchBSplineConnectivity:
                 f'Representation "{representation}" not recognised. Representation must either be "unique", "unpacked", or "separated" !'
             )
 
-    def get_duplicate_unpacked_nodes_mask(self) -> np.ndarray[np.bool_]:
+    def get_duplicate_unpacked_nodes_mask(self) -> NDArray[np.bool_]:
         """
         Returns a boolean mask indicating which nodes in the unpacked representation are duplicates.
 
         Returns
         -------
-        duplicate_nodes_mask : np.ndarray
+        duplicate_nodes_mask : NDArray of bool
             Boolean mask of shape (nb_nodes,) where True indicates a node is duplicated
             across multiple patches and False indicates it appears only once.
         """
@@ -407,15 +431,15 @@ class MultiPatchBSplineConnectivity:
         return duplicate_nodes_mask
 
     def extract_exterior_borders(
-        self, splines: list[BSpline]
-    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], np.ndarray[np.integer]]:
+        self, splines: Sequence[BSpline]
+    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], NDArray[np.integer]]:
         """
         Extract exterior borders from B-spline patches.
 
         Parameters
         ----------
-        splines : list[BSpline]
-            Array of B-spline patches to extract borders from.
+        splines : Sequence[BSpline]
+            Sequence of B-spline patches to extract borders from.
 
         Returns
         -------
@@ -423,7 +447,7 @@ class MultiPatchBSplineConnectivity:
             Connectivity information for the border patches.
         border_splines : list[BSpline]
             Array of B-spline patches representing the borders.
-        border_unique_to_self_unique_connectivity : np.ndarray[np.integer]
+        border_unique_to_self_unique_connectivity : NDArray[np.integer]
             Array mapping border unique nodes to original unique nodes.
 
         Raises
@@ -448,7 +472,7 @@ class MultiPatchBSplineConnectivity:
             unique_nodes_inds_spline = separated_unique_nodes_inds[i]
             shape_by_patch_spline = self.shape_by_patch[i]
             for axis in range(self.npa):
-                bases = np.hstack((spline.bases[(axis + 1) :], spline.bases[:axis]))
+                bases = spline.bases[(axis + 1) :] + spline.bases[:axis]
                 axes = arr[axis:-1] + arr[:axis]
                 border_shape_by_patch_spline = np.hstack(
                     (shape_by_patch_spline[(axis + 1) :], shape_by_patch_spline[:axis])
@@ -481,7 +505,6 @@ class MultiPatchBSplineConnectivity:
                     ]
                     border_shape_by_patch.append(border_shape_by_patch_spline_border)
                     # print(f"side {-1} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-        border_splines = np.array(border_splines, dtype="object")
         border_unique_nodes_inds = np.concatenate(border_unique_nodes_inds)
         border_shape_by_patch = np.concatenate(border_shape_by_patch)
         border_unique_to_self_unique_connectivity, inverse = np.unique(
@@ -502,23 +525,23 @@ class MultiPatchBSplineConnectivity:
         )
 
     def extract_interior_borders(
-        self, splines: list[BSpline]
-    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], np.ndarray[np.integer]]:
+        self, splines: Sequence[BSpline]
+    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], NDArray[np.integer]]:
         """
         Extract interior borders from B-spline patches where nodes are shared between patches.
 
         Parameters
         ----------
-        splines : list[BSpline]
-            Array of B-spline patches to extract borders from.
+        splines : Sequence[BSpline]
+            Sequence of B-spline patches to extract borders from.
 
         Returns
         -------
         border_connectivity : MultiPatchBSplineConnectivity
             Connectivity information for the border patches.
         border_splines : list[BSpline]
-            Array of B-spline patches representing the borders.
-        border_unique_to_self_unique_connectivity : np.ndarray[np.integer]
+            List of B-spline patches representing the borders.
+        border_unique_to_self_unique_connectivity : NDArray[np.integer]
             Array mapping border unique nodes to original unique nodes.
 
         Raises
@@ -543,7 +566,7 @@ class MultiPatchBSplineConnectivity:
             unique_nodes_inds_spline = separated_unique_nodes_inds[i]
             shape_by_patch_spline = self.shape_by_patch[i]
             for axis in range(self.npa):
-                bases = np.hstack((spline.bases[(axis + 1) :], spline.bases[:axis]))
+                bases = spline.bases[(axis + 1) :] + spline.bases[:axis]
                 axes = arr[axis:-1] + arr[:axis]
                 border_shape_by_patch_spline = np.hstack(
                     (shape_by_patch_spline[(axis + 1) :], shape_by_patch_spline[:axis])
@@ -576,7 +599,6 @@ class MultiPatchBSplineConnectivity:
                     ]
                     border_shape_by_patch.append(border_shape_by_patch_spline_border)
                     # print(f"side {-1} of axis {axis} of patch {i} uses nodes {unique_nodes_inds_spline_border}")
-        border_splines = np.array(border_splines, dtype="object")
         border_unique_nodes_inds = np.concatenate(border_unique_nodes_inds)
         border_shape_by_patch = np.concatenate(border_shape_by_patch)
         border_unique_to_self_unique_connectivity, inverse = np.unique(
@@ -676,16 +698,16 @@ class MultiPatchBSplineConnectivity:
     #     return border_connectivity, border_splines, border_unique_to_self_unique_connectivity
 
     def subset(
-        self, splines: list[BSpline], patches_to_keep: np.ndarray[np.integer]
-    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], np.ndarray[np.integer]]:
+        self, splines: Sequence[BSpline], patches_to_keep: NDArray[np.integer]
+    ) -> tuple["MultiPatchBSplineConnectivity", list[BSpline], NDArray[np.integer]]:
         """
         Create a subset of the multi-patch B-spline connectivity by keeping only selected patches.
 
         Parameters
         ----------
-        splines : list[BSpline]
-            Array of B-spline patches to subset.
-        patches_to_keep : np.ndarray[np.integer]
+        splines : Sequence[BSpline]
+            Sequence of B-spline patches to subset.
+        patches_to_keep : NDArray[np.integer]
             Indices of patches to keep in the subset.
 
         Returns
@@ -694,10 +716,10 @@ class MultiPatchBSplineConnectivity:
             New connectivity object containing only the selected patches.
         new_splines : list[BSpline]
             Array of B-spline patches for the selected patches.
-        new_unique_to_self_unique_connectivity : np.ndarray[np.integer]
+        new_unique_to_self_unique_connectivity : NDArray[np.integer]
             Array mapping new unique nodes to original unique nodes.
         """
-        new_splines = splines[patches_to_keep]
+        new_splines = [splines[i] for i in patches_to_keep]
         separated_unique_nodes_inds = self.unique_field_indices(())
         new_unique_nodes_inds = np.concatenate(
             [separated_unique_nodes_inds[patch].flat for patch in patches_to_keep]
@@ -717,13 +739,15 @@ class MultiPatchBSplineConnectivity:
 
     def make_control_poly_meshes(
         self,
-        splines: Iterable[BSpline],
-        separated_ctrl_pts: Iterable[np.ndarray[np.floating]],
-        n_eval_per_elem: Union[Iterable[int], int] = 10,
+        splines: Sequence[BSpline],
+        separated_ctrl_pts: Sequence[NDArray[np.floating]],
+        n_eval_per_elem: Union[Sequence[int], int] = 10,
         n_step: int = 1,
         unique_fields: dict = {},
-        separated_fields: Union[dict, None] = None,
-        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
+        separated_fields: Union[Sequence[dict], None] = None,
+        XI_list: Union[
+            None, Sequence[Union[tuple[NDArray[np.floating], ...], None]]
+        ] = None,
         paraview_sizes: dict = {},
     ) -> list[io.Mesh]:
 
@@ -771,13 +795,15 @@ class MultiPatchBSplineConnectivity:
 
     def make_elem_separator_meshes(
         self,
-        splines: Iterable[BSpline],
-        separated_ctrl_pts: Iterable[np.ndarray[np.floating]],
-        n_eval_per_elem: Union[Iterable[int], int] = 10,
+        splines: Sequence[BSpline],
+        separated_ctrl_pts: Sequence[NDArray[np.floating]],
+        n_eval_per_elem: Union[Sequence[int], int] = 10,
         n_step: int = 1,
         unique_fields: dict = {},
-        separated_fields: Union[dict, None] = None,
-        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
+        separated_fields: Union[Sequence[dict], None] = None,
+        XI_list: Union[
+            None, Sequence[Union[tuple[NDArray[np.floating], ...], None]]
+        ] = None,
         paraview_sizes: dict = {},
         disable_parallel: bool = False,
         verbose: bool = True,
@@ -840,13 +866,15 @@ class MultiPatchBSplineConnectivity:
 
     def make_elements_interior_meshes(
         self,
-        splines: Iterable[BSpline],
-        separated_ctrl_pts: Iterable[np.ndarray[np.floating]],
-        n_eval_per_elem: Union[Iterable[int], int] = 10,
+        splines: Sequence[BSpline],
+        separated_ctrl_pts: Sequence[NDArray[np.floating]],
+        n_eval_per_elem: Union[Sequence[int], int] = 10,
         n_step: int = 1,
         unique_fields: dict = {},
-        separated_fields: Union[dict, None] = None,
-        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
+        separated_fields: Union[Sequence[dict], None] = None,
+        XI_list: Union[
+            None, Sequence[Union[tuple[NDArray[np.floating], ...], None]]
+        ] = None,
         disable_parallel: bool = False,
         verbose: bool = True,
     ) -> list[io.Mesh]:
@@ -908,13 +936,15 @@ class MultiPatchBSplineConnectivity:
 
     def make_all_meshes(
         self,
-        splines: Iterable[BSpline],
-        separated_ctrl_pts: Iterable[np.ndarray[np.floating]],
+        splines: Sequence[BSpline],
+        separated_ctrl_pts: Sequence[NDArray[np.floating]],
         n_step: int = 1,
-        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        n_eval_per_elem: Union[int, Sequence[int]] = 10,
         unique_fields: dict = {},
-        separated_fields: Union[list[dict], None] = None,
-        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
+        separated_fields: Union[Sequence[dict], None] = None,
+        XI_list: Union[
+            None, Sequence[Union[tuple[NDArray[np.floating], ...], None]]
+        ] = None,
         verbose: bool = True,
         fields_on_interior_only: Union[bool, Literal["auto"], list[str]] = "auto",
         disable_parallel: bool = False,
@@ -929,32 +959,32 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        splines : Iterable[BSpline]
+        splines : Sequence[BSpline]
             List of B-spline patches to process.
-        separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+        separated_ctrl_pts : Sequence[NDArray[np.floating]]
             Control points for each patch in separated representation.
         n_step : int, optional
             Number of time steps to generate. By default, 1.
-        n_eval_per_elem : Union[int, Iterable[int]], optional
+        n_eval_per_elem : Union[int, Sequence[int]], optional
             Number of evaluation points per element for each parametric dimension.
             If an `int` is provided, the same number is used for all dimensions.
-            If an `Iterable` is provided, each value corresponds to a different dimension.
+            If an `Sequence` is provided, each value corresponds to a different dimension.
             By default, 10.
         unique_fields : dict, optional
             Fields in unique representation to visualize. By default, `{}`.
             Keys are field names, values are arrays (not callables nor FE fields).
-        separated_fields : Union[list[dict], None], optional
+        separated_fields : Union[Sequence[dict], None], optional
             Fields to visualize at each time step.
-            List of `self.nb_patchs` dictionaries (one per patch) of format:
+            Sequence of `self.nb_patchs` dictionaries (one per patch) of format:
             {
                 "field_name": `field_value`
             }
             where `field_value` can be either:
-            1. A `np.ndarray` with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`)
-            2. A `np.ndarray` with shape (`n_step`, `field_size`, `*grid_shape`)
-            3. A function that computes field values (`np.ndarray[np.floating]`) at given points from the `BSpline` instance and `XI`.
+            1. A `NDArray` with shape (`n_step`, `field_size`, `self.shape_by_patch[patch]`)
+            2. A `NDArray` with shape (`n_step`, `field_size`, `*grid_shape`)
+            3. A function that computes field values (`NDArray[np.floating]`) at given points from the `BSpline` instance and `XI`.
             By default, None.
-        XI_list : Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]], optional
+        XI_list : Union[None, Sequence[Union[tuple[NDArray[np.floating], ...], None]]], optional
             Parametric coordinates at which to evaluate the B-spline patches and fields.
             If not `None`, overrides the `n_eval_per_elem` parameter.
             If `None`, regular grids are generated according to `n_eval_per_elem`.
@@ -1024,9 +1054,8 @@ class MultiPatchBSplineConnectivity:
         if fields_on_interior_only is True:
             for key, value in fields.items():
                 if callable(value):
-                    paraview_sizes[key] = value(
-                        splines[0], np.zeros((splines[0].NPa, 1))
-                    ).shape[2]
+                    z = np.zeros((splines[0].NPa, 1))
+                    paraview_sizes[key] = value(splines[0], z).shape[2]  # type: ignore
                 else:
                     paraview_sizes[key] = value.shape[1]
         elif fields_on_interior_only is False:
@@ -1035,18 +1064,16 @@ class MultiPatchBSplineConnectivity:
             for key, value in fields.items():
                 if key not in ["u", "U", "displacement", "displ"]:
                     if callable(value):
-                        paraview_sizes[key] = value(
-                            splines[0], np.zeros((splines[0].NPa, 1))
-                        ).shape[2]
+                        z = np.zeros((splines[0].NPa, 1))
+                        paraview_sizes[key] = value(splines[0], z).shape[2]  # type: ignore
                     else:
                         paraview_sizes[key] = value.shape[1]
         else:
             for key in fields_on_interior_only:
                 value = fields[key]
                 if callable(value):
-                    paraview_sizes[key] = value(
-                        splines[0], np.zeros((splines[0].NPa, 1))
-                    ).shape[2]
+                    z = np.zeros((splines[0].NPa, 1))
+                    paraview_sizes[key] = value(splines[0], z).shape[2]  # type: ignore
                 else:
                     paraview_sizes[key] = value.shape[1]
 
@@ -1092,15 +1119,15 @@ class MultiPatchBSplineConnectivity:
 
     def save_paraview(
         self,
-        splines: Iterable[BSpline],
-        separated_ctrl_pts: Iterable[np.ndarray[np.floating]],
+        splines: Sequence[BSpline],
+        separated_ctrl_pts: Sequence[NDArray[np.floating]],
         path: str,
         name: str,
         n_step: int = 1,
-        n_eval_per_elem: Union[int, Iterable[int]] = 10,
+        n_eval_per_elem: Union[int, Sequence[int]] = 10,
         unique_fields: dict = {},
         separated_fields: Union[list[dict], None] = None,
-        XI_list: Union[None, Iterable[tuple[np.ndarray[np.floating], ...]]] = None,
+        XI_list: Union[None, Sequence[tuple[NDArray[np.floating], ...]]] = None,
         groups: Union[dict[str, dict[str, Union[str, int]]], None] = None,
         make_pvd: bool = True,
         verbose: bool = True,
@@ -1119,9 +1146,9 @@ class MultiPatchBSplineConnectivity:
 
         Parameters
         ----------
-        splines : Iterable[BSpline]
+        splines : Sequence[BSpline]
             List of B-spline patches to save.
-        separated_ctrl_pts : Iterable[np.ndarray[np.floating]]
+        separated_ctrl_pts : Sequence[NDArray[np.floating]]
             Control points for each patch in separated representation.
         path : str
             Directory path where the files will be saved.
@@ -1129,10 +1156,10 @@ class MultiPatchBSplineConnectivity:
             Base name for the output files.
         n_step : int, optional
             Number of time steps to save. By default, 1.
-        n_eval_per_elem : Union[int, Iterable[int]], optional
+        n_eval_per_elem : Union[int, Sequence[int]], optional
             Number of evaluation points per element for each parametric dimension.
             If an `int` is provided, the same number is used for all dimensions.
-            If an `Iterable` is provided, each value corresponds to a different dimension.
+            If an `Sequence` is provided, each value corresponds to a different dimension.
             By default, 10.
         unique_fields : dict, optional
             Fields in unique representation to save. By default, `{}`.
@@ -1155,16 +1182,16 @@ class MultiPatchBSplineConnectivity:
             - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
             - `*grid_shape`: Shape of the evaluation grid (number of points along each parametric axis)
 
-            3. A function that computes field values (`np.ndarray[np.floating]`) at given
+            3. A function that computes field values (`NDArray[np.floating]`) at given
             points from the `BSpline` instance and `XI`, the tuple of arrays containing evaluation
-            points for each dimension (`tuple[np.ndarray[np.floating], ...]`).
+            points for each dimension (`tuple[NDArray[np.floating], ...]`).
             The result should be an array of shape (`n_step`, `n_points`, `field_size`) where:
             - `n_step`: Number of time steps
             - `n_points`: Number of evaluation points (n_xi × n_eta × ...)
             - `field_size`: Size of the field at each point (1 for scalar, 3 for vector)
 
             By default, None.
-        XI_list : Iterable[tuple[np.ndarray[np.floating], ...]], optional
+        XI_list : Sequence[tuple[NDArray[np.floating], ...]], optional
             Parametric coordinates at which to evaluate the B-spline patches and fields.
             If not `None`, overrides the `n_eval_per_elem` parameter.
             If `None`, regular grids are generated according to `n_eval_per_elem`.
@@ -1230,17 +1257,17 @@ class MultiPatchBSplineConnectivity:
 
         interior = "interior"
         if interior in groups:
-            groups[interior]["npart"] += 1
+            groups[interior]["npart"] += 1  # type: ignore
         else:
             groups[interior] = {"ext": "vtu", "npart": 1, "nstep": n_step}
         elements_borders = "elements_borders"
         if elements_borders in groups:
-            groups[elements_borders]["npart"] += 1
+            groups[elements_borders]["npart"] += 1  # type: ignore
         else:
             groups[elements_borders] = {"ext": "vtu", "npart": 1, "nstep": n_step}
         control_points = "control_points"
         if control_points in groups:
-            groups[control_points]["npart"] += 1
+            groups[control_points]["npart"] += 1  # type: ignore
         else:
             groups[control_points] = {"ext": "vtu", "npart": 1, "nstep": n_step}
 
@@ -1260,7 +1287,7 @@ class MultiPatchBSplineConnectivity:
         )
 
         prefix = os.path.join(
-            path, f"{name}_{interior}_{groups[interior]['npart'] - 1}"
+            path, f"{name}_{interior}_{groups[interior]['npart'] - 1}"  # type: ignore
         )
         for time_step, mesh in enumerate(elem_interior_meshes):
             mesh.write(f"{prefix}_{time_step}.vtu")
@@ -1268,7 +1295,7 @@ class MultiPatchBSplineConnectivity:
             print(interior, "saved")
 
         prefix = os.path.join(
-            path, f"{name}_{elements_borders}_{groups[elements_borders]['npart'] - 1}"
+            path, f"{name}_{elements_borders}_{groups[elements_borders]['npart'] - 1}"  # type: ignore
         )
         for time_step, mesh in enumerate(elem_separator_meshes):
             mesh.write(f"{prefix}_{time_step}.vtu")
@@ -1276,7 +1303,7 @@ class MultiPatchBSplineConnectivity:
             print(elements_borders, "saved")
 
         prefix = os.path.join(
-            path, f"{name}_{control_points}_{groups[control_points]['npart'] - 1}"
+            path, f"{name}_{control_points}_{groups[control_points]['npart'] - 1}"  # type: ignore
         )
         for time_step, mesh in enumerate(control_poly_meshes):
             mesh.write(f"{prefix}_{time_step}.vtu")
@@ -1629,6 +1656,8 @@ class CouplesBSplineBorder:
             )
         if len(nodes_couples) > 0:
             nodes_couples = np.vstack(nodes_couples)
+        else:
+            nodes_couples = np.empty((0, 2), dtype="int")
         return MultiPatchBSplineConnectivity.from_nodes_couples(
             nodes_couples, shape_by_patch
         )
@@ -1679,56 +1708,56 @@ class CouplesBSplineBorder:
             borders2_turned_and_fliped.append(border2_turned_and_fliped)
         return borders1, borders2_turned_and_fliped
 
-    def compute_border_couple_DN(
-        self,
-        couple_ind: int,
-        splines: list[BSpline],
-        XI1_border: list[np.ndarray],
-        k1: list[int],
-    ):
-        spline1 = splines[self.spline1_inds[couple_ind]]
-        ax1 = self.axes1[couple_ind]
-        front1 = self.front_sides1[couple_ind]
-        spline2 = splines[self.spline2_inds[couple_ind]]
-        ax2 = self.axes2[couple_ind]
-        front2 = self.front_sides2[couple_ind]
-        XI1 = (
-            XI1_border[(self.NPa - 1 - ax1) :]
-            + [np.array([spline1.bases[ax1].span[int(front1)]])]
-            + XI1_border[: (self.NPa - 1 - ax1)]
-        )
-        transpose_back = np.argsort(self.transpose_2_to_1[couple_ind])
-        flip_back = self.flip_2_to_1[couple_ind][transpose_back]
-        spans = spline2.getSpans()[(ax2 + 1) :] + spline2.getSpans()[:ax2]
-        XI2_border = [
-            (
-                (sum(spans[i]) - XI1_border[transpose_back[i]])
-                if flip_back[i]
-                else XI1_border[transpose_back[i]]
-            )
-            for i in range(self.NPa - 1)
-        ]
-        XI2 = (
-            XI2_border[(self.NPa - 1 - ax2) :]
-            + [np.array([spline2.bases[ax2].span[int(front2)]])]
-            + XI2_border[: (self.NPa - 1 - ax2)]
-        )
-        k2 = k1[: self.axes1[couple_ind]] + k1[(self.axes1[couple_ind] + 1) :]
-        k2 = [k2[i] for i in transpose_back]
-        k2 = (
-            k2[: self.axes2[couple_ind]]
-            + [k1[self.axes1[couple_ind]]]
-            + k2[self.axes2[couple_ind] :]
-        )
-        DN1 = spline1.DN(XI1, k=k1)
-        DN2 = spline2.DN(XI2, k=k2)
-        return DN1, DN2
+    # def compute_border_couple_DN(
+    #     self,
+    #     couple_ind: int,
+    #     splines: list[BSpline],
+    #     XI1_border: list[NDArray],
+    #     k1: list[int],
+    # ):
+    #     spline1 = splines[self.spline1_inds[couple_ind]]
+    #     ax1 = self.axes1[couple_ind]
+    #     front1 = self.front_sides1[couple_ind]
+    #     spline2 = splines[self.spline2_inds[couple_ind]]
+    #     ax2 = self.axes2[couple_ind]
+    #     front2 = self.front_sides2[couple_ind]
+    #     XI1 = (
+    #         XI1_border[(self.NPa - 1 - ax1) :]
+    #         + [np.array([spline1.bases[ax1].span[int(front1)]])]
+    #         + XI1_border[: (self.NPa - 1 - ax1)]
+    #     )
+    #     transpose_back = np.argsort(self.transpose_2_to_1[couple_ind])
+    #     flip_back = self.flip_2_to_1[couple_ind][transpose_back]
+    #     spans = spline2.getSpans()[(ax2 + 1) :] + spline2.getSpans()[:ax2]
+    #     XI2_border = [
+    #         (
+    #             (sum(spans[i]) - XI1_border[transpose_back[i]])
+    #             if flip_back[i]
+    #             else XI1_border[transpose_back[i]]
+    #         )
+    #         for i in range(self.NPa - 1)
+    #     ]
+    #     XI2 = (
+    #         XI2_border[(self.NPa - 1 - ax2) :]
+    #         + [np.array([spline2.bases[ax2].span[int(front2)]])]
+    #         + XI2_border[: (self.NPa - 1 - ax2)]
+    #     )
+    #     k2 = k1[: self.axes1[couple_ind]] + k1[(self.axes1[couple_ind] + 1) :]
+    #     k2 = [k2[i] for i in transpose_back]
+    #     k2 = (
+    #         k2[: self.axes2[couple_ind]]
+    #         + [k1[self.axes1[couple_ind]]]
+    #         + k2[self.axes2[couple_ind] :]
+    #     )
+    #     DN1 = spline1.DN(XI1, k=k1)
+    #     DN2 = spline2.DN(XI2, k=k2)
+    #     return DN1, DN2
 
     def compute_border_couple_DN(
         self,
         couple_ind: int,
         splines: list[BSpline],
-        XI1_border: list[np.ndarray],
+        XI1_border: list[NDArray],
         k1: list[int],
     ):
         spline1 = splines[self.spline1_inds[couple_ind]]
@@ -1756,8 +1785,8 @@ class CouplesBSplineBorder:
         k = int(sum(k1))
         DN2 = spline2.DN(XI2, k=k)
         if k != 0:
-            AT = 1
-            for i in range(k):
+            AT = A
+            for i in range(1, k):
                 AT = np.tensordot(AT, A, 0)
             AT = AT.transpose(*2 * np.arange(k), *(2 * np.arange(k) + 1))
             DN2 = np.tensordot(DN2, AT, k)

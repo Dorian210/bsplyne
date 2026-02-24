@@ -24,9 +24,14 @@ tmp/
 .vscode/
 .idea/
 
-# Generated files (examples)
+# Generated files
 *.vtu
 *.pvd
+*.stl
+*.pkl
+*.json
+*.npy
+*.tiff
 
 # OS
 .DS_Store

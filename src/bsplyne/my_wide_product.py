@@ -181,9 +181,11 @@ def my_wide_product(A: sps.spmatrix, B: sps.spmatrix) -> sps.csr_matrix:
 
     # Ensure matrices are in CSR format for fast row slicing.
     if not sps.isspmatrix_csr(A):
-        A = A.tocsr()
+        A = A.tocsr()  # type: ignore
+    assert isinstance(A, sps.csr_matrix)
     if not sps.isspmatrix_csr(B):
-        B = B.tocsr()
+        B = B.tocsr()  # type: ignore
+    assert isinstance(B, sps.csr_matrix)
 
     height = A.shape[0]
     a_width = A.shape[1]
