@@ -858,7 +858,7 @@ class BSpline:
         true_knots_to_add = []
         for axis, knots_to_add_elem in enumerate(knots_to_add):
             if isinstance(
-                knots_to_add_elem, int
+                knots_to_add_elem, (int, np.integer)
             ):  # It is a number of knots to add in each element
                 u_knot = np.unique(self.bases[axis].knot)
                 a, b = u_knot[:-1, None], u_knot[1:, None]
