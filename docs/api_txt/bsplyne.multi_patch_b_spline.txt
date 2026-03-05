@@ -64,7 +64,7 @@ npa : int
 
   >>> from_separated_ctrlPts(
     cls,
-    separated_ctrlPts: numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]],
+    separated_ctrlPts: Sequence[numpy.ndarray[typing.Any, numpy.dtype[numpy.floating]]],
     eps: float = 1e-10,
     return_nodes_couples: bool = False
 ) -> Union[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, tuple[bsplyne.multi_patch_b_spline.MultiPatchBSplineConnectivity, numpy.ndarray[Any, numpy.dtype[numpy.integer]]]]

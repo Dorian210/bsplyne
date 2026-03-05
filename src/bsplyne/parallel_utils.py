@@ -2,10 +2,8 @@ from collections.abc import Sequence
 import multiprocessing as mp
 import cloudpickle
 from multiprocessing import shared_memory
-import threading
-import queue
 from typing import Union, Callable
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import numpy as np
 from numpy.typing import NDArray
 import tempfile, os
@@ -13,36 +11,6 @@ import time
 import gc
 
 mp.reduction.ForkingPickler.dumps = cloudpickle.dumps  # type: ignore
-
-
-def _save_worker(save_queue: queue.Queue):
-    """
-    Background worker that saves data to disk from a queue.
-
-    This function runs in a separate thread. It waits for filename-result pairs
-    pushed into the `save_queue`, and writes them to disk using `np.save`.
-    When it receives a `None` sentinel value, it terminates.
-
-    Parameters
-    ----------
-    save_queue : queue.Queue
-        A thread-safe queue containing `(fname, result)` pairs to be saved. The thread
-        stops when it receives a `None` item.
-
-    Notes
-    -----
-    - Each result is saved as a `numpy.ndarray` with `dtype=object` using `np.save`.
-    - The queue can be bounded to control memory usage in the main thread.
-    """
-    while True:
-        item = save_queue.get()
-        if item is None:
-            break  # stop signal
-        fname, result = item
-        to_save = np.empty(1, dtype=object)
-        to_save[0] = result
-        np.save(fname, to_save, allow_pickle=True)
-        save_queue.task_done()
 
 
 def _worker(
@@ -98,37 +66,34 @@ def _worker(
     block_folder = os.path.join(temp_dir, f"block_{idx}")
     os.makedirs(block_folder, exist_ok=True)
 
-    # File d’écriture limitée pour éviter surcharge mémoire
-    save_queue = queue.Queue(maxsize=10)
-    writer_thread = threading.Thread(target=_save_worker, args=(save_queue,))
-    writer_thread.start()
+    shm = None
+    shared_array = None
+    if shared_mem is not None:
+        shm_name, shape, dtype = shared_mem
+        shm = shared_memory.SharedMemory(name=shm_name)
+        shared_array = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
 
     with tqdm(
         block_args,
         desc=f"{pbar_title_prefix}: Block {idx}",
         disable=not verbose,
         position=position,
+        leave=False,
     ) as pbar:
-        if shared_mem is not None:
-            shm_name, shape, dtype = shared_mem
-            shm = shared_memory.SharedMemory(name=shm_name)
-            try:
-                array = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
-                for i, args in enumerate(pbar):
-                    result = func[i](*args, array)
-                    fname = os.path.join(block_folder, f"res_{i}.npy")
-                    save_queue.put((fname, result))  # enqueue (blocks if full)
-            finally:
-                shm.close()
-        else:
-            for i, args in enumerate(pbar):
+        for i, args in enumerate(pbar):
+            if shared_array is not None:
+                result = func[i](*args, shared_array)
+            else:
                 result = func[i](*args)
-                fname = os.path.join(block_folder, f"res_{i}.npy")
-                save_queue.put((fname, result))  # mise en file (bloque si trop plein)
+            fname = os.path.join(block_folder, f"res_{i}.npy")
+            to_save = np.empty(1, dtype=object)
+            to_save[0] = result
+            np.save(fname, to_save, allow_pickle=True)
+            del result
 
-    # Finalisation propre
-    save_queue.put(None)  # signal de fin
-    writer_thread.join()  # on attend que tout soit écrit
+    if shm is not None:
+        shm.close()
+
     gc.collect()
     return block_folder
 
@@ -262,12 +227,14 @@ def parallel_blocks_inner(
 
     # Load and collect results from each file
     with tqdm(total=n_tasks, desc=f"{pbar_title}: Gather", disable=not verbose) as pbar:
-        results = []
+        results = [None] * n_tasks
+        current_idx = 0
         for idx, block_folder in enumerate(files):
             for i in range(len(blocks[idx])):
                 fpath = os.path.join(block_folder, f"res_{i}.npy")
-                results.append(np.load(fpath, allow_pickle=True)[0])
+                results[current_idx] = np.load(fpath, allow_pickle=True)[0]
                 os.remove(fpath)
+                current_idx += 1
                 pbar.update(1)
             os.rmdir(block_folder)
         os.rmdir(temp_dir)
@@ -363,7 +330,7 @@ def parallel_blocks(
     )
     t_first = time.time() - t0
     t_thresh = (num_blocks / (num_blocks - 1)) * (num_blocks / n_tasks) * est_proc_cost
-    disable_parallel = t_first <= t_thresh
+    disable_parallel = False  # t_first <= t_thresh
     if verbose:
         print(
             f"First task time: {t_first:.3f}s, t_seuil: {t_thresh:.3f}s -> "
