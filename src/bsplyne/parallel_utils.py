@@ -1,7 +1,8 @@
+# %%
 from collections.abc import Sequence
-import multiprocessing as mp
+import concurrent.futures
 import cloudpickle
-from multiprocessing import shared_memory
+from multiprocessing import shared_memory, reduction, Queue, Manager
 from typing import Union, Callable
 from tqdm.auto import tqdm
 import numpy as np
@@ -10,7 +11,7 @@ import tempfile, os
 import time
 import gc
 
-mp.reduction.ForkingPickler.dumps = cloudpickle.dumps  # type: ignore
+reduction.ForkingPickler.dumps = cloudpickle.dumps  # type: ignore
 
 
 def _worker(
@@ -18,51 +19,35 @@ def _worker(
     block_args: Sequence[tuple],
     idx: int,
     temp_dir: str,
-    verbose: bool,
-    jupyter: bool,
-    pbar_title_prefix: str,
     shared_mem: Union[tuple[str, tuple[int, ...], type], None],
+    progress_queue: Queue = None,
 ) -> str:
     """
-    Apply a function to a sequence of argument tuples, saving results asynchronously during computation.
+    Worker process function that executes a block of tasks and saves results to disk.
 
-    This function iterates over `block_args`, applying `func[i]` to each tuple of arguments,
-    and delegates saving to disk to a background thread. This allows computation to proceed
-    without waiting for disk writes to complete, reducing idle CPU time and improving throughput.
+    Each task result is saved as an individual '.npy' file to manage memory pressure.
+    Progress is reported back to the parent process via a shared multiprocessing Queue.
 
     Parameters
     ----------
     func : Sequence[Callable]
-        Functions to apply to each tuple in `block_args`. Each function should accept unpacked arguments
-        from its corresponding tuple.
+        Sequence of functions to apply to each tuple in `block_args`.
     block_args : Sequence[tuple]
-        Sequence of `tuple` arguments to be passed to `func`. Each `tuple` is unpacked as arguments.
+        Sequence of argument tuples for each function call.
     idx : int
-        Index of the current block, used for progress bar positioning and output file naming.
+        Index of the current block, used for directory naming.
     temp_dir : str
-        Path to the temporary directory where result files will be saved.
-    verbose : bool
-        If `True`, enables the progress bar. If `False`, disables it.
-    jupyter : bool
-        If `True`, sets the progress bar position to `0` for Jupyter notebook compatibility.
-        If `False`, uses `idx` as the position.
-    pbar_title_prefix : str
-        Prefix string for the progress bar description.
+        Base directory for temporary storage.
+    shared_mem : tuple or None
+        Metadata (name, shape, dtype) for an optional shared memory buffer.
+    progress_queue : multiprocessing.Queue, optional
+        Queue used to send increment signals for the progress bar.
 
     Returns
     -------
     str
-        Path to the folder containing the saved `.npy` result files for this block.
-
-    Notes
-    -----
-    - A background thread is launched to handle saving to disk via `np.save`.
-    - A bounded queue is used to limit memory usage when saving is slower than computation.
-    - Result files are saved as `"res_{i}.npy"` in a folder named `"block_{idx}"` within `temp_dir`.
-    - Each file contains a single `numpy.ndarray` with `dtype=object` and one element.
-    - Explicit garbage collection is triggered after saving.
+        Path to the subdirectory containing the saved result files for this block.
     """
-    position = 0 if jupyter else idx
     block_folder = os.path.join(temp_dir, f"block_{idx}")
     os.makedirs(block_folder, exist_ok=True)
 
@@ -73,23 +58,18 @@ def _worker(
         shm = shared_memory.SharedMemory(name=shm_name)
         shared_array = np.ndarray(shape, dtype=dtype, buffer=shm.buf)
 
-    with tqdm(
-        block_args,
-        desc=f"{pbar_title_prefix}: Block {idx}",
-        disable=not verbose,
-        position=position,
-        leave=False,
-    ) as pbar:
-        for i, args in enumerate(pbar):
-            if shared_array is not None:
-                result = func[i](*args, shared_array)
-            else:
-                result = func[i](*args)
-            fname = os.path.join(block_folder, f"res_{i}.npy")
-            to_save = np.empty(1, dtype=object)
-            to_save[0] = result
-            np.save(fname, to_save, allow_pickle=True)
-            del result
+    for i, args in enumerate(block_args):
+        if shared_array is not None:
+            result = func[i](*args, shared_array)
+        else:
+            result = func[i](*args)
+        fname = os.path.join(block_folder, f"res_{i}.npy")
+        to_save = np.empty(1, dtype=object)
+        to_save[0] = result
+        np.save(fname, to_save, allow_pickle=True)
+        del result
+        if progress_queue is not None:
+            progress_queue.put(1)
 
     if shm is not None:
         shm.close()
@@ -108,81 +88,48 @@ def parallel_blocks_inner(
     shared_mem_last_arg: Union[NDArray, None],
 ) -> list:
     """
-    Execute a list of functions with their corresponding argument tuples, optionally in parallel blocks.
+    Orchestrate the execution of tasks in parallel blocks with disk-based result caching.
 
-    This function performs the actual execution of tasks either sequentially or in parallel,
-    depending on the `disable_parallel` flag. When running in parallel, the tasks are divided into
-    `num_blocks` groups (blocks), each executed by a separate worker process. Intermediate results
-    are temporarily saved to disk as `.npy` files to limit memory usage and are reloaded sequentially
-    after all processes complete.
+    Divides tasks into groups (blocks), assigns them to worker processes, and monitors
+    overall progress. Results are temporarily written to disk to keep the memory footprint
+    low during parallel execution, then reloaded sequentially into a final list.
 
     Parameters
     ----------
     funcs : Sequence[Callable]
-        List of functions to execute. Must have the same length as `all_args`.
-        Each function is called as `func(*args)` for its corresponding argument tuple.
+        List of functions to execute.
     all_args : Sequence[tuple]
-        List of tuples, each containing the arguments for the corresponding function in `funcs`.
+        List of argument tuples matching `funcs`.
     num_blocks : int
-        Number of parallel blocks (i.e., worker processes) to use when `disable_parallel` is False.
-        Determines how many subsets of tasks will be distributed among processes.
+        Number of worker processes to use.
     verbose : bool
-        If True, enables progress bars and displays information about block processing and result gathering.
+        If True, displays progress bars for both the execution and gathering phases.
     pbar_title : str
-        Title prefix used for progress bar descriptions.
+        Base title for the progress bars.
     disable_parallel : bool
-        If True, all tasks are executed sequentially in the current process. If False, tasks are divided
-        into blocks and processed in parallel using a multiprocessing pool.
-    shared_mem_last_arg : Union[NDArray, None]
-        Optional NumPy array placed in shared memory and appended automatically as the last argument
-        of each task. This is useful for sharing large read-only data (e.g., images, meshes) without
-        duplicating memory across processes.
+        If True, executes tasks sequentially in the main process.
+    shared_mem_last_arg : NDArray or None
+        An optional NumPy array to be placed in shared memory and passed to every task.
 
     Returns
     -------
     list
-        List of results obtained from applying each function to its corresponding argument tuple,
-        preserving the original task order.
-
-    Notes
-    -----
-    - **Sequential mode:** if `disable_parallel` is True, all functions are executed in the current
-      process with an optional progress bar.
-    - **Parallel mode:**
-        * The tasks are split into `num_blocks` subsets.
-        * Each subset is processed by a separate worker via `multiprocessing.Pool`.
-        * Each worker writes its results as `.npy` files inside a temporary subfolder.
-        * After all workers complete, results are reloaded in the original order, and temporary files
-          and folders are deleted.
-    - **Shared memory:** if `shared_mem_last_arg` is provided, it is stored once in shared memory
-      and accessible by all workers, avoiding redundant copies of large data arrays.
-    - Compatible with both standard Python terminals and Jupyter notebooks (adaptive progress bars).
-    - Intended for internal use by higher-level orchestration functions such as `parallel_blocks()`.
+        Ordered list of results.
     """
 
     n_tasks = len(all_args)
-
-    # Detect if running in a Jupyter environment
-    try:
-        from IPython import get_ipython  # type: ignore
-
-        jupyter = get_ipython().__class__.__name__ == "ZMQInteractiveShell"
-    except:
-        jupyter = False
 
     # Runs in sequential if necessary
     if disable_parallel:
         if shared_mem_last_arg is not None:
             all_args = [tuple(list(args) + [shared_mem_last_arg]) for args in all_args]
         results = []
-        position = 0 if jupyter else 0
         for i, (func, args) in enumerate(
             tqdm(
                 zip(funcs, all_args),
                 total=n_tasks,
                 desc=pbar_title,
                 disable=not verbose,
-                position=position,
             )
         ):
             results.append(func(*args))
@@ -198,32 +145,53 @@ def parallel_blocks_inner(
     else:
         shared_mem = None
 
-    # Split the functions and arguments into blocks
-    nb_each, extras = divmod(n_tasks, num_blocks)
-    sizes = extras * [nb_each + 1] + (num_blocks - extras) * [nb_each]
-    blocks = []
-    funcs_blocks = []
-    start = 0
-    for size in sizes:
-        end = start + size
-        blocks.append(all_args[start:end])
-        funcs_blocks.append(funcs[start:end])
-        start = end
+    try:
+        # Split the functions and arguments into blocks
+        nb_each, extras = divmod(n_tasks, num_blocks)
+        sizes = extras * [nb_each + 1] + (num_blocks - extras) * [nb_each]
+        blocks = []
+        funcs_blocks = []
+        start = 0
+        for size in sizes:
+            end = start + size
+            blocks.append(all_args[start:end])
+            funcs_blocks.append(funcs[start:end])
+            start = end
 
-    temp_dir = tempfile.mkdtemp(prefix="parallel_blocks_")
-    args = [
-        (func_block, block, i, temp_dir, verbose, jupyter, pbar_title, shared_mem)
-        for i, (func_block, block) in enumerate(zip(funcs_blocks, blocks))
-    ]
+        temp_dir = tempfile.mkdtemp(prefix="parallel_blocks_")
 
-    # Start the worker processes
-    with mp.Pool(num_blocks) as pool:
-        files = pool.starmap(_worker, args)
+        with Manager() as manager:  # Utiliser 'with' pour un cleanup automatique
+            progress_queue = manager.Queue()
 
-    # Free the memory space allocated to the shared array
-    if shared_mem_last_arg is not None:
-        shm.close()  # type: ignore
-        shm.unlink()  # type: ignore
+            args = [
+                (func_block, block, i, temp_dir, shared_mem, progress_queue)
+                for i, (func_block, block) in enumerate(zip(funcs_blocks, blocks))
+            ]
+
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=num_blocks
+            ) as executor:
+                futures = [executor.submit(_worker, *a) for a in args]
+
+                with tqdm(
+                    total=n_tasks, desc=f"{pbar_title}: Run", disable=not verbose
+                ) as pbar:
+                    while not all(f.done() for f in futures):
+                        try:
+                            msg = progress_queue.get(timeout=0.1)
+                            pbar.update(msg)
+                        except:
+                            if any(
+                                f.done() and f.exception() is not None for f in futures
+                            ):
+                                break
+                files = [f.result() for f in futures]
+
+    finally:
+        # Free the memory space allocated to the shared array
+        if shared_mem_last_arg is not None:
+            shm.close()  # type: ignore
+            shm.unlink()  # type: ignore
 
     # Load and collect results from each file
     with tqdm(total=n_tasks, desc=f"{pbar_title}: Gather", disable=not verbose) as pbar:
@@ -252,54 +220,71 @@ def parallel_blocks(
     shared_mem_last_arg: Union[NDArray, None] = None,
 ) -> list:
     """
-    Execute a set of independent tasks sequentially or in parallel, depending on their estimated cost.
+    Execute tasks in parallel with disk-based caching and shared memory support.
 
-    The function evaluates the runtime of the first task to decide whether parallelization is worth
-    the overhead of process creation. If parallel execution is deemed beneficial, the remaining tasks
-    are distributed across several blocks processed in parallel. Otherwise, all tasks are executed
-    sequentially. This strategy is especially useful when task runtimes are variable or short compared
-    to process spawning costs.
+    This function orchestrates the execution of multiple independent tasks. It
+    automatically handles process creation, progress reporting via a single
+    global bar, and manages memory by swapping intermediate results to disk.
 
     Parameters
     ----------
-    funcs : Union[Callable, Sequence[Callable]]
-        Function or list of functions to execute.
-        - If a single function is provided, it will be applied to each argument tuple in `all_args`.
-        - If a list of functions is provided, it must have the same length as `all_args`, allowing each
-          task to use a distinct callable.
-    all_args : Union[Sequence[tuple], None], optional
-        Sequence of tuples containing the positional arguments for each function call.
-        If the function takes no arguments, set `all_args` to `None` (defaults to empty tuples).
-    num_blocks : Union[int, None], optional
-        Number of parallel blocks (i.e., worker processes) to use. Defaults to half the number of CPU cores.
-        A value of 1 forces sequential execution.
+    funcs : Callable or Sequence[Callable]
+        - If a single Callable: Applied to every tuple in `all_args` (Mapping mode).
+        - If a Sequence of Callables: Each function is executed with its
+          corresponding arguments (Task Pool mode).
+    all_args : Sequence[tuple], optional
+        A list of tuples containing positional arguments for each task.
+        Example: `[(arg1,), (arg1, arg2)]`. If None, functions are called without args.
+    num_blocks : int, optional
+        Number of worker processes. Defaults to half of the available CPU cores.
     verbose : bool, optional
-        If True, displays timing information and progress bars. Default is True.
+        If True, displays real-time progress bars for execution and gathering.
     pbar_title : str, optional
-        Title prefix displayed in the progress bar. Default is "Processing blocks".
+        Prefix text for the progress bars.
     disable_parallel : bool, optional
-        If True, forces all computations to run sequentially regardless of estimated profitability.
-        Default is False.
+        If True, forces sequential execution in the main process.
     est_proc_cost : float, optional
-        Estimated process creation cost in seconds. Used to determine whether parallelization
-        will yield a net speedup. Default is 0.5 s.
-    shared_mem_last_arg : Union[NDArray, None], optional
-        Shared-memory NumPy array to be appended automatically as the last argument in each task.
-        This allows tasks to read from a large, read-only array without duplicating it in memory.
-        Default is None.
+        Estimated overhead (in seconds) to spawn a new process. If the first
+        task's duration is significantly lower than the overhead divided by
+        efficiency gain, the remaining tasks switch to sequential mode.
+    shared_mem_last_arg : NDArray, optional
+        A NumPy array placed in a shared memory segment. It is automatically
+        appended as the **last argument** to every function call. This avoids
+        duplicating large read-only data across worker processes.
 
     Returns
     -------
     list
-        List of results, one per task, preserving the input order.
+        A list of results in the same order as the input tasks.
 
     Notes
     -----
-    - The first task is executed sequentially to estimate its runtime.
-    - Parallelization is enabled only if the estimated time saved exceeds the cost of process creation.
-    - When parallel mode is used, tasks are executed in blocks, and intermediate results are stored
-      temporarily on disk to limit memory usage, then reloaded and combined sequentially.
-    - Compatible with Jupyter progress bars (`tqdm.notebook`).
+    - **Memory Efficiency**: Intermediate results are saved as `.npy` files in
+      a temporary directory. This prevents the RAM from filling up if workers
+      produce large objects faster than the main process can collect them.
+    - **Error Handling**: If any worker fails, the exception is captured,
+      other workers are terminated, and the error is raised in the main process.
+    - **Shared Memory**: The `shared_mem_last_arg` is read-only. Workers access
+      the original memory buffer without copying, which is critical for
+      processing large datasets (GBs).
+
+    Examples
+    --------
+    >>> # 1. Mapping mode (Single function, multiple arguments)
+    >>> def square(n): return n*n
+    >>> args = [(i,) for i in range(10)]
+    >>> results = parallel_blocks(square, args)
+
+    >>> # 2. Task Pool mode (Different functions/lambdas)
+    >>> tasks = [lambda: os.getpid(), lambda: time.time()]
+    >>> results = parallel_blocks(tasks)
+
+    >>> # 3. Using Shared Memory (The large array is the LAST argument)
+    >>> def lookup(index, big_array):
+    ...     return big_array[index]
+    >>> data = np.linspace(0, 100, 1000000)
+    >>> query_indices = [(10,), (500,), (9999,)]
+    >>> results = parallel_blocks(lookup, query_indices, shared_mem_last_arg=data)
     """
     if num_blocks is None:
         num_blocks = max(1, os.cpu_count() // 2)  # type: ignore
@@ -330,7 +315,7 @@ def parallel_blocks(
     )
     t_first = time.time() - t0
     t_thresh = (num_blocks / (num_blocks - 1)) * (num_blocks / n_tasks) * est_proc_cost
-    disable_parallel = False  # t_first <= t_thresh
+    disable_parallel = t_first <= t_thresh
     if verbose:
         print(
             f"First task time: {t_first:.3f}s, t_seuil: {t_thresh:.3f}s -> "
@@ -348,3 +333,27 @@ def parallel_blocks(
     results = [first_result] + results_rest
 
     return results
+
+
+if __name__ == "__main__":
+
+    import numpy as np
+    import pyvista as pv
+
+    def make_sphere(center):
+        sphere = pv.Sphere(
+            radius=1.0, center=center, theta_resolution=10, phi_resolution=10
+        )
+        sphere["elevation"] = sphere.points[:, 2]
+        return sphere
+
+    ms = lambda c: make_sphere(c)
+
+    data_input = [(np.random.randint(-10, 10, size=3),) for _ in range(2000)]
+    spheres = parallel_blocks(ms, data_input)
+
+    plotter = pv.Plotter()
+    plotter.add_mesh(pv.merge(spheres), scalars="elevation", show_edges=True)
+    plotter.show()
+
+# %%
